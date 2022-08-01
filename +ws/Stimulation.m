@@ -85,7 +85,7 @@ classdef Stimulation < ws.Subsystem   % & ws.DependentProperties
     end  % protected methods block
     
 %     methods (Access = protected)
-%         function syncTasksToChannelMembership_(self)             %#ok<MANU>
+%         function syncsToChannelMembership_(self)             %#ok<MANU>
 %             % Clear the timed digital output task, will be recreated when acq is
 %             % started.  Have to do this b/c the channels used for the timed digital output task has changed.
 %             % And have to do it first to avoid a temporary collision.

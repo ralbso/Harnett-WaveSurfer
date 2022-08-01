@@ -1430,6 +1430,16 @@ classdef WavesurferModel < ws.Model
             self.Acquisition_.cacheAnalogScalingCoefficients_(analogScalingCoefficients) ;
             self.ClockAtRunStart_ = clockAtRunStartTic ;  % store the value returned from the looper
             
+            % RM 04/06/2022 Record timestamp in POSIX instead of datetime
+            % Note: There seems to be a constant delay of ~120-180ms 
+            % between each acquired sweep. I don't know where it
+            % originates from (presumably the Looper getting started), but
+            % I have determined (and am convinced) it's not related to the
+            % timestamp changes
+%             tempClockAtRunStart = datetime(clockAtRunStartTic);
+%             tempClockAtRunStart.TimeZone = 'America/New_York';
+%             self.ClockAtRunStart_ = posixtime(tempClockAtRunStart);
+            
             % Now tell the logging subsystem that a run is about to start,
             % since the analog scaling coeffs have been set
             try
@@ -3843,7 +3853,11 @@ classdef WavesurferModel < ws.Model
             isDeviceNameAOTerminalIDPairValid = ...
                 ws.isDeviceNameTerminalIDPairValid(deviceNameForEachAOChannel, aoTerminalIDForEachAOChannel, allDeviceNames, nAOTerminalsPerDevice) ;            
             
-            self.IsAOChannelTerminalOvercommitted_ = (nOccurencesOfDeviceAndTerminal>1) | ~isDeviceNameAOTerminalIDPairValid ;            
+            self.IsAOChannelTerminalOvercommitted_ = (nOccurencesOfDeviceAndTerminal>1) | ~isDeviceNameAOTerminalIDPairValid ;
+            
+            % REVERTED TO ABOVE 09/22/2021
+%             self.IsAOChannelTerminalOvercommitted_ = (nOccurencesOfDeviceAndTerminal>2) | ~isDeviceNameAOTerminalIDPairValid ;            
+
         end
         
         function syncIsDIOChannelTerminalOvercommitted_(self)

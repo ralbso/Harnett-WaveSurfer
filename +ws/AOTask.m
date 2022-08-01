@@ -62,12 +62,23 @@ classdef AOTask < handle
                 for deviceIndex = 1:deviceCount ,
                     deviceName = deviceNamePerDevice{deviceIndex} ;
                     terminalIDs = terminalIDsPerDevice{deviceIndex} ;                    
-                    nChannelsThisDevice = length(terminalIDs) ;
-                    for iChannel = 1:nChannelsThisDevice ,
-                        terminalID = terminalIDs(iChannel) ;
-                        dabsTask = self.DabsDaqTasks_{deviceIndex} ;
-                        dabsTask.createAOVoltageChan(deviceName, terminalID) ;
-                    end
+                    
+                    % START CHANGE 09/23/21
+                    % Choose only Cmd I. We don't need Cmd V during our 
+                    % recordings. 
+                    % Note that this only affects WavesurferModel, 
+                    % and not TestPulser
+                    terminalID = terminalIDs(1);
+                    dabsTask = self.DabsDaqTasks_{deviceIndex};
+                    dabsTask.createAOVoltageChan(deviceName, terminalID)
+                    % END CHANGE
+                    
+%                     nChannelsThisDevice = length(terminalIDs) ;
+%                     for iChannel = 1:nChannelsThisDevice ,
+%                         terminalID = terminalIDs(iChannel) ;
+%                         dabsTask = self.DabsDaqTasks_{deviceIndex} ;
+%                         dabsTask.createAOVoltageChan(deviceName, terminalID) ;
+%                     end
                     [referenceClockSource, referenceClockRate] = ...
                         ws.getReferenceClockSourceAndRate(deviceName, primaryDeviceName, isPrimaryDeviceAPXIDevice) ;
                     set(dabsTask, 'refClkSrc', referenceClockSource) ;

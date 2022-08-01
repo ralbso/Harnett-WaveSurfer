@@ -1310,7 +1310,9 @@ classdef Refiller < handle
             if isempty(self.TheFiniteAnalogOutputTask_) ,
                 deviceNameForEachAOChannel = self.AOChannelDeviceNames_ ;
                 isTerminalOvercommittedForEachAOChannel = self.IsAOChannelTerminalOvercommitted_ ;
-                isInTaskForEachAOChannel = ~isTerminalOvercommittedForEachAOChannel ;
+%                 isInTaskForEachAOChannel = ~isTerminalOvercommittedForEachAOChannel ;
+                % CHANGED 09/22/2021
+                isInTaskForEachAOChannel = isTerminalOvercommittedForEachAOChannel;
                 deviceNameForEachChannelInAOTask = deviceNameForEachAOChannel(isInTaskForEachAOChannel) ;
                 terminalIDForEachChannelInAOTask = self.AOChannelTerminalIDs_(isInTaskForEachAOChannel) ;                
                 primaryDeviceName = self.PrimaryDeviceName_ ;

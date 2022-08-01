@@ -68,7 +68,8 @@ classdef Logging < ws.Subsystem
             self.NextSweepIndex_ = 1 ; % Number of sweeps acquired since value was reset + 1 (reset occurs automatically on FileBaseName change).
             %self.FirstSweepIndexInNextFile_ = 1 ; % Number of sweeps acquired since value was reset + 1 (reset occurs automatically on FileBaseName change).
             self.IsOKToOverwrite_ = false ;
-            self.DateAsString_ = datestr(now(),'yyyy-mm-dd') ;  % Determine this now, don't want it to change in mid-run
+            self.DateAsString_ = datestr(now(),'HHMMSS') ;  % Determine this now, don't want it to change in mid-run
+
         end
         
         function set.FileLocation(self, newValue)
@@ -350,13 +351,17 @@ classdef Logging < ws.Subsystem
             
             % For tidyness
             self.DidWriteSomeDataForThisSweep_ = [] ;
-        end
+            
+            end
         
         function startingSweep(self)
             %profile resume
             % No data written at the start of the sweep
             self.DidWriteSomeDataForThisSweep_ = false ;
             %profile off
+            
+            % Added by RM, 02/14/2022
+%             self.DateAsString_ = datestr(now(),'HHMMSSFFF');  % Include time in filename
         end
         
         function completingSweep(self)
@@ -610,18 +615,38 @@ classdef Logging < ws.Subsystem
     methods (Access = protected)
         function result = augmentedBaseName_(self)
             baseName = self.FileBaseName ;
+            
             % Add the date, if wanted
-            if self.DoIncludeDate_ ,
-                baseNameWithDate = sprintf('%s_%s',baseName,self.DateAsString_);
+            if self.DoIncludeDate_
+                baseNameWithDate = sprintf('%s_%s', self.DateAsString_, baseName);
             else
-                baseNameWithDate = baseName ;
+                baseNameWithDate = baseName;
             end
+            
             % Add the session number, if wanted
-            if self.DoIncludeSessionIndex_ ,
-                result = sprintf('%s_%03d',baseNameWithDate,self.SessionIndex_);
+            if self.DoIncludeSessionIndex_
+                result = sprintf('%s%d',baseNameWithDate,self.SessionIndex_);
             else
-                result = baseNameWithDate ;
+                result = baseNameWithDate;
             end
+            
+            
+%             % Add the date, if wanted
+%             if self.DoIncludeDate_ ,
+%                 baseNameWithDate = sprintf('%s_%s',baseName,self.DateAsString_);
+%             else
+%                 baseNameWithDate = baseName ;
+%             end
+%             % Add the session number, if wanted
+%             if self.DoIncludeSessionIndex_ ,
+%                 if self.DoIncludeDate_ ,
+%                     result = sprintf('%s_%d',baseNameWithDate,self.SessionIndex_);
+%                 else
+%                     result = sprintf('%s%d',baseNameWithDate,self.SessionIndex_);
+%                 end
+%             else
+%                 result = baseNameWithDate ;
+%             end
         end  % function        
     end  % protected methods block
     

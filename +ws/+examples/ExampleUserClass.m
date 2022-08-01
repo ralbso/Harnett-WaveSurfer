@@ -7,7 +7,7 @@ classdef ExampleUserClass < ws.UserClass
     % functions below, and want to be settable/gettable from outside the
     % object.
     properties
-        Greeting = 'Hello, there!'
+        Greeting = '>>'
         TimeAtStartOfLastRunAsString_ = ''  
           % TimeAtStartOfLastRunAsString_ should only be accessed from 
           % the methods below, but making it protected is a pain.
