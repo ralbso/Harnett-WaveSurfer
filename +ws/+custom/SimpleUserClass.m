@@ -8,15 +8,15 @@ classdef SimpleUserClass < ws.UserClass
         TimeAtStartOfLastRunAsString_ = ''  
           % TimeAtStartOfLastRunAsString_ should only be accessed from 
           % the methods below, but making it protected is a pain.
-        selectedStimulusIndex = 0
-        selectedStimulusName = ''
+        selectedStimulusIndex = 0;
+        selectedStimulusName = '';
     end
     
     methods        
         function self = SimpleUserClass()
             % creates the "user object"
             fprintf("%s Loading preferences.\n", ...
-                    self.LineIndicator);
+                    self.LineIndicator);    
         end
         
         function wake(self, rootModel)  
@@ -67,7 +67,7 @@ classdef SimpleUserClass < ws.UserClass
             end
             
             if self.selectedStimulusName == "Stim RDK Sequence" && ~wsModel.IsStimulationEnabled
-                fprintf("%s Enabling stimulation", [self.LineIndicator]);
+                fprintf("%s Enabling stimulation\n", [self.LineIndicator]);
                 wsModel.IsStimulationEnabled = 1;
                 
                 fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
