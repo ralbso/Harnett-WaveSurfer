@@ -4,8 +4,8 @@ classdef SimpleUserClass < ws.UserClass
     % functions below, and want to be settable/gettable from outside the
     % object.
     properties
-        LineIndicator = '  '
-        TimeAtStartOfLastRunAsString_ = ''  
+        LineIndicator = '  ';
+        TimeAtStartOfLastRunAsString_ = '';
           % TimeAtStartOfLastRunAsString_ should only be accessed from 
           % the methods below, but making it protected is a pain.
         selectedStimulusIndex = 0;
@@ -55,12 +55,16 @@ classdef SimpleUserClass < ws.UserClass
             
             % start python with RDK in external cmd window
             if self.selectedStimulusName == "Normal RDK Sequence"
+                wsModel.StimulationUsesAcquisitionTrigger = 1;
+                wsModel.StimulationTriggerIndex = 1;
                 fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
                 system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk.py &"); 
             end
             
             if self.selectedStimulusName == "Stim RDK Sequence" && wsModel.IsStimulationEnabled
+                wsModel.StimulationUsesAcquisitionTrigger = 0;
+                wsModel.StimulationTriggerIndex = 2;
                 fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
                 system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk_stim.py &")
@@ -69,6 +73,9 @@ classdef SimpleUserClass < ws.UserClass
             if self.selectedStimulusName == "Stim RDK Sequence" && ~wsModel.IsStimulationEnabled
                 fprintf("%s Enabling stimulation\n", [self.LineIndicator]);
                 wsModel.IsStimulationEnabled = 1;
+                
+                wsModel.StimulationUsesAcquisitionTrigger = 0;
+                wsModel.StimulationTriggerIndex = 2;
                 
                 fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
