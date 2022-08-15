@@ -51,7 +51,7 @@ classdef SimpleUserClass < ws.UserClass
             self.selectedStimulusIndex = int32(wsModel.stimulusLibrary.SelectedOutputableIndex);
 %             disp(self.selectedStimulusIndex);
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
-            fprintf("%s Running Stimulus: %s.\n", self.LineIndicator, self.selectedStimulusName);
+            fprintf("%s Running stimulus: %s.\n", self.LineIndicator, self.selectedStimulusName);
             
             if self.selectedStimulusName ~= "Stim RDK Sequence"
                 wsModel.StimulationUsesAcquisitionTrigger = 1;
@@ -59,30 +59,24 @@ classdef SimpleUserClass < ws.UserClass
             
             % start python with RDK in external cmd window
             if self.selectedStimulusName == "Normal RDK Sequence"
-                fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
+                fprintf("%s Starting show_rdk.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
                 system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk.py &"); 
             end
             
-            if self.selectedStimulusName == "Stim RDK Sequence" && wsModel.IsStimulationEnabled
+            if self.selectedStimulusName == "Stim RDK Sequence"
+                if wsModel.IsStimulationEnabled 
+                    fprintf("%s Enabling stimulation.\n", self.LineIndicator);
+                    wsModel.IsStimulationEnabled = 1; 
+                end
+                
                 wsModel.StimulationUsesAcquisitionTrigger = 0;
                 wsModel.StimulationTriggerIndex = 2;
-                fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
+                fprintf("%s Starting show_rdk_stim.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
                 system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk_stim.py &")
             end
             
-            if self.selectedStimulusName == "Stim RDK Sequence" && ~wsModel.IsStimulationEnabled
-                fprintf("%s Enabling stimulation\n", [self.LineIndicator]);
-                wsModel.IsStimulationEnabled = 1;
-                
-                wsModel.StimulationUsesAcquisitionTrigger = 0;
-                wsModel.StimulationTriggerIndex = 2;
-                
-                fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
-                cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
-                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk_stim.py &")
-            end
         end
         
         function completingRun(self, wsModel)  %#ok<INUSD>
