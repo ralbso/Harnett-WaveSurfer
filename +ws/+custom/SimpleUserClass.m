@@ -43,20 +43,22 @@ classdef SimpleUserClass < ws.UserClass
         
         % These methods are called in the frontend process
         function willSaveToProtocolFile(self, wsModel)  
-            fprintf('%s  Saving protocol to %s.\n', ...
+            fprintf('%s Saving protocol to %s.\n', ...
                     self.LineIndicator, wsModel.AbsoluteProtocolFileName);
         end
         
         function startingRun(self, wsModel)
             self.selectedStimulusIndex = int32(wsModel.stimulusLibrary.SelectedOutputableIndex);
-            disp(self.selectedStimulusIndex);
+%             disp(self.selectedStimulusIndex);
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
-            disp(self.selectedStimulusName);
+            fprintf("%s Running Stimulus: %s.\n", self.LineIndicator, self.selectedStimulusName);
+            
+            if self.selectedStimulusName ~= "Stim RDK Sequence"
+                wsModel.StimulationUsesAcquisitionTrigger = 1;
+            end
             
             % start python with RDK in external cmd window
             if self.selectedStimulusName == "Normal RDK Sequence"
-                wsModel.StimulationUsesAcquisitionTrigger = 1;
-                wsModel.StimulationTriggerIndex = 1;
                 fprintf("%s Starting %s on Python\n", [self.LineIndicator, self.selectedStimulusName]);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
                 system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk.py &"); 
