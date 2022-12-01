@@ -61,7 +61,7 @@ classdef SimpleUserClass < ws.UserClass
             if self.selectedStimulusName == "Normal RDK Sequence"
                 fprintf("%s Starting show_rdk.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
-                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk.py &"); 
+                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\show_rdk.py &"); 
             end
             
             if self.selectedStimulusName == "Stim RDK Sequence"
@@ -74,7 +74,7 @@ classdef SimpleUserClass < ws.UserClass
                 wsModel.StimulationTriggerIndex = 2;
                 fprintf("%s Starting show_rdk_stim.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
                 cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
-                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\psychopy\show_rdk_stim.py &")
+                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\show_rdk_stim.py &")
             end
             
         end
