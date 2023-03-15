@@ -32,6 +32,9 @@ classdef SimpleUserClass < ws.UserClass
             fprintf('%s Saving files to %s with prefix %s.\n', self.LineIndicator, ...
                 rootModel.DataFileLocation, rootModel.DataFileBaseName);
             
+            % WIP: put filename in workspace to access from Python
+            assignin('base', 'nextFileName', rootModel.NextRunAbsoluteFileName)
+            
         end
         
         function delete(self)
@@ -48,34 +51,27 @@ classdef SimpleUserClass < ws.UserClass
         end
         
         function startingRun(self, wsModel)
+            % WIP: put filename in workspace to access from Python
+%             assignin('base', 'nextFileName', wsModel.NextRunAbsoluteFileName)
+            
             self.selectedStimulusIndex = int32(wsModel.stimulusLibrary.SelectedOutputableIndex);
 %             disp(self.selectedStimulusIndex);
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
-            fprintf("%s Running stimulus: %s.\n", self.LineIndicator, self.selectedStimulusName);
+            fprintf("%s Running injection protocol: %s.\n", self.LineIndicator, self.selectedStimulusName);
             
-            if self.selectedStimulusName ~= "Stim RDK Sequence"
-                wsModel.StimulationUsesAcquisitionTrigger = 1;
-            end
-            
-            % start python with RDK in external cmd window
-            if self.selectedStimulusName == "Normal RDK Sequence"
-                fprintf("%s Starting show_rdk.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
-                cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
-                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\show_rdk.py &"); 
-            end
-            
-            if self.selectedStimulusName == "Stim RDK Sequence"
-                if wsModel.IsStimulationEnabled 
-                    fprintf("%s Enabling stimulation.\n", self.LineIndicator);
-                    wsModel.IsStimulationEnabled = 1; 
-                end
-                
-                wsModel.StimulationUsesAcquisitionTrigger = 0;
-                wsModel.StimulationTriggerIndex = 2;
-                fprintf("%s Starting show_rdk_stim.py on Python.\n", self.LineIndicator, self.selectedStimulusName);
-                cd 'C:\Users\vr3\Documents\GitHub\raul-exps'
-                system("C:\Users\vr3\miniconda3\envs\psychopy\python.exe C:\Users\vr3\Documents\GitHub\raul-exps\scripts\show_rdk_stim.py &")
-            end
+%             if self.selectedStimulusName ~= "Stim RDK Sequence"
+%                 wsModel.StimulationUsesAcquisitionTrigger = 1;
+%             end
+%             
+%             if self.selectedStimulusName == "Plasticity Induction"
+%                 if wsModel.IsStimulationEnabled 
+%                     fprintf("%s Enabling stimulation.\n", self.LineIndicator);
+%                     wsModel.IsStimulationEnabled = 1; 
+%                 end
+%                 
+%                 wsModel.StimulationUsesAcquisitionTrigger = 0;
+%                 wsModel.StimulationTriggerIndex = 2;
+%             end
             
         end
         
