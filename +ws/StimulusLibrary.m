@@ -1918,8 +1918,10 @@ classdef StimulusLibrary < ws.Model & ws.ValueComparable   % & ws.Mimic  % & ws.
             % be selected as the thing for the Stimulation subsystem to
             % output.
             sequences = self.Sequences_ ;
-            maps = self.Maps_ ;
-            out = [sequences maps] ;
+            % RM 06/22/2023
+            out = sequences;
+%             maps = self.Maps_ ;
+%             out = [sequences maps] ;
         end  % function        
         
         function setSelectedItemByHandle_(self, newValue)
