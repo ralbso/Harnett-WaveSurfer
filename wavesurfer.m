@@ -28,7 +28,7 @@ function varargout = wavesurfer(varargin)
     %   does what you would expect.
 
     % Takes a while to start, so give some feedback
-    fprintf('Starting WaveSurfer...');
+    fprintf('Starting WaveSurfer...\n');
     
     % Process arguments
     [wasProtocolFileNameGivenAtCommandLine, protocolFileName, isCommandLineOnly, doRunInDebugMode] = processArguments(varargin) ;
@@ -96,7 +96,7 @@ function varargout = wavesurfer(varargin)
     end
     
     % Declare WS started
-    fprintf('done.\n');    
+    fprintf('\ndone.\n');    
 end  % function
 
 
