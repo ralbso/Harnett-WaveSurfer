@@ -21,26 +21,26 @@ classdef GenTLCameraInterface < handle
                 fprintf('   Connection already established');
             end
         end
-                
-        function disconnect(self)
-            if self.cameraServer.BytesToOutput == 0
-                fwrite(self.cameraServer, 3, 'int8')
-                fclose(self.cameraServer);
-            else
-                pause(0.05);
-                fwrite(self.cameraServer, 3, 'int8')
-                fclose(self.cameraServer);
-            end
-        end
-        
-        function startCapture(self)
-            fwrite(self.cameraServer, 1, 'int8')
+
+        function startCapture(self, pipette, sweep)
+            fprintf(['   Starting capture for p' num2str(pipette) '_' num2str(sweep, '%04.f')])
+            fwrite(self.cameraServer, [1 pipette sweep])
         end
         
         function stopCapture(self)
-            fwrite(self.cameraServer, 2, 'int8')
+            fwrite(self.cameraServer, [2 0 0])
         end
         
+        function disconnect(self)
+            if self.cameraServer.BytesToOutput == 0
+                fwrite(self.cameraServer, [3 0 0])
+                fclose(self.cameraServer);
+            else
+                pause(0.05);
+                fwrite(self.cameraServer, [3 0 0])
+                fclose(self.cameraServer);
+            end
+        end
         
     end
 end
