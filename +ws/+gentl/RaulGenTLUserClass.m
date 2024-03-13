@@ -35,7 +35,7 @@ classdef RaulGenTLUserClass < ws.UserClass
                 mkdir(rootModel.DataFileLocation);
             end
             
-            system(sprintf('start matlab -nosplash -r "camera = ws.custom.CameraAcquisition(''%s'');"', ...
+            system(sprintf('start matlab -nosplash -r "camera = ws.gentl.CameraAcquisition(''%s'');"', ...
                 rootModel.DataFileLocation));
             
             rootModel.DataFileBaseName = 'p';
@@ -47,7 +47,7 @@ classdef RaulGenTLUserClass < ws.UserClass
             self.isIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
             if self.isIInFrontend_
                 if ~self.isCameraInterfaceInitialized_
-                    self.cameraInterface_ = ws.custom.GenTLCameraInterface(self.address, self.port);
+                    self.cameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
                     self.cameraInterface_.connect;
 %                     self.cameraObj = self.cameraInterface_.connect();
                     self.isCameraInterfaceInitialized_ = true;
