@@ -10,7 +10,7 @@ classdef CameraAcquisition < handle
         user = 'Raul'
         address = '169.254.99.158'
         port = 4545
-        bytesAvailableCnt = 8
+        bytesAvailableCnt = 3
         fallbackSweep = 101
     end
     
@@ -24,10 +24,8 @@ classdef CameraAcquisition < handle
         function self = CameraAcquisition(rootpath)
             self.rootpath = rootpath;
 
-            % [~, hostname] = system('hostname');
-            % hostname = string(strtrim(hostname));
-            % address = resolvehost(hostname, 'address');
             self.client = tcpip(self.address, self.port, 'NetworkRole', 'client');
+            self.client.Timeout = Inf;
             self.client.BytesAvailableFcnMode = 'byte';
             self.client.BytesAvailableFcnCount = self.bytesAvailableCnt;
             self.client.BytesAvailableFcn = @self.readDataFcn;
@@ -116,17 +114,19 @@ classdef CameraAcquisition < handle
         end % func
         
         function readDataFcn(self, src, ~)
-            input = fread(src, 24);
-            trigger = input(1);
-            switch trigger
-                case 1
-                    pipette = input(2);
-                    sweep = input(3);
-                    self.beginCameraAcquisition(pipette, sweep);
-                case 2
-                    self.safelyStopCamera;
-                case 3
-                    self.safelyDeleteCamera;
+            arr = fread(src, 3);
+            if ~isempty(arr)
+                t = arr(1);
+                switch t
+                    case 1
+                        pipette = arr(2);
+                        sweep = arr(3);
+                        self.beginCameraAcquisition(pipette, sweep);
+                    case 2
+                        self.safelyStopCamera;
+                    case 3
+                        self.safelyDeleteCamera;
+                end
             end
         end % func
 
