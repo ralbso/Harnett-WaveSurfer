@@ -27,7 +27,7 @@ classdef GenTLCameraInterface < handle
                 fwrite(self.cameraServer, 3, 'int8')
                 fclose(self.cameraServer);
             else
-                pause(0.05);
+                pause(0.1);
                 fwrite(self.cameraServer, 3, 'int8')
                 fclose(self.cameraServer);
             end
