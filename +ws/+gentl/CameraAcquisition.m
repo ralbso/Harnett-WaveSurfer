@@ -2,7 +2,9 @@ classdef CameraAcquisition < handle
     properties (Constant=true)
         frameRate = 62
         exposureTime = 15000
+        roiPosition = [0 0 592 592];
         compressionQuality = 100
+        
         LineIndicator = '  '
         codec = 'MPEG-4'
         ext = '.mp4'
@@ -39,7 +41,7 @@ classdef CameraAcquisition < handle
                 self.camera = videoinput('gentl', 1, 'Mono8');
                 fprintf('%s Camera connection established\n', self.LineIndicator);
                 
-                self.camera.ROIPosition = [0 0 688 688];
+                self.camera.ROIPosition = self.roiPosition;
                 src = self.camera.Source;
                 src.ExposureTime = self.exposureTime;
                 src.AcquisitionFrameRate = self.frameRate;
@@ -75,10 +77,7 @@ classdef CameraAcquisition < handle
         function safelyStopCamera(self)
             if ~isempty(self.camera)
                 fprintf('%s Safely stopping camera\n', self.LineIndicator);
-                if isrunning(self.camera)
-%                     closepreview(self.camera)
-                    stop(self.camera)
-                end
+                stop(self.camera)
             end
         end % func
         
@@ -105,8 +104,8 @@ classdef CameraAcquisition < handle
         end % func
         
         function readDataFcn(self, src, ~)
-            trigger = fread(src, 1);
-            switch trigger
+            t = fread(src, 3);
+            switch t
                 case 1
                     self.beginCameraAcquisition;
                 case 2
