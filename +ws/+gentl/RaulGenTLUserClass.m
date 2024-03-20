@@ -89,13 +89,11 @@ classdef RaulGenTLUserClass < ws.UserClass
             if self.isIInFrontend_ && wsModel.IsLoggingEnabled
                 try
                     fprintf("\n%s Triggering camera.\n", self.LineIndicator);
-                    fprintf([num2str(self.pipette) num2str(self.sweep)])
+                    %s fprintf([num2str(self.pipette) num2str(self.sweep)])
                     self.cameraInterface_.startCapture(self.pipette, self.sweep);
                 catch
-                    fprintf('There was an error triggering the camera')
+                    fprintf('\n%s There was an error triggering the camera', self.LineIndicator)
                 end
-            else
-                fprintf('here')
             end
         end
         
