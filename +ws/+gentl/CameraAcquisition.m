@@ -7,10 +7,15 @@ classdef CameraAcquisition < handle
         LineIndicator = '  '
         codec = 'MPEG-4'
         ext = '.mp4'
-        user = 'Raul'
         address = '169.254.99.158'
         port = 4545
         bytesAvailableCnt = 3
+        
+        cameraTTLPort = 'COM5'
+        baudRate = 128000;
+    end
+    
+    properties (Constant=false)
         fallbackSweep = 101
     end
     
@@ -18,6 +23,7 @@ classdef CameraAcquisition < handle
         rootpath
         client
         camera
+        cameraSerial
     end
     
     methods
@@ -30,9 +36,10 @@ classdef CameraAcquisition < handle
             self.client.BytesAvailableFcnCount = self.bytesAvailableCnt;
             self.client.BytesAvailableFcn = @self.readDataFcn;
             fopen(self.client);
-
+            
+            self.cameraSerial = serial(self.cameraTTLPort, 'BaudRate', self.baudRate);
             self.initializeCamera();
-        end % func
+        end % CameraAcquisition init
         
         function initializeCamera(self)
             if isempty(self.camera)
@@ -50,10 +57,12 @@ classdef CameraAcquisition < handle
                 triggerconfig(self.camera, config(2));
                 self.camera.FramesPerTrigger = Inf;
                 self.camera.LoggingMode = 'disk';
+                self.camera.FramesAcquiredFcnCount = 1;
+                self.camera.FramesAcquiredFcn = {@frameAcquiredTTL, self.cameraSerial};
 
                 preview(self.camera);
             end
-        end % func
+        end % initializeCamera
         
         function beginCameraAcquisition(self, pipette, sweep)
             fpath = [self.rootpath '\p' num2str(pipette) '_' num2str(sweep, '%04.f')];
@@ -80,7 +89,7 @@ classdef CameraAcquisition < handle
                 fprintf(fileID, datestr(triggerTime, 'HH:MM:SS.FFF'));
                 fclose(fileID);
             end
-        end % func
+        end % beginCameraAcquisition
         
         function safelyStopCamera(self)
             if ~isempty(self.camera)
@@ -89,7 +98,7 @@ classdef CameraAcquisition < handle
                     stop(self.camera)
                 end
             end
-        end % func
+        end % safelyStopCamera
         
         function safelyDeleteCamera(self)
             if ~isempty(self.camera)
@@ -111,7 +120,7 @@ classdef CameraAcquisition < handle
                     end
                 end
             end
-        end % func
+        end % safelyDeleteCamera
         
         function readDataFcn(self, src, ~)
             arr = fread(src, 3);
@@ -128,7 +137,11 @@ classdef CameraAcquisition < handle
                         self.safelyDeleteCamera;
                 end
             end
-        end % func
+        end % readDataFcn
+        
+        function frameAcquiredTTL(~, ~, serialCom)
+            fwrite(serialCom, 'a');
+        end % frameAcquiredTTL
 
     end % methods
     
