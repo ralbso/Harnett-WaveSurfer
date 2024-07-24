@@ -558,6 +558,7 @@ classdef Logging < ws.Subsystem
                         'DataType','int16');
                 end
                 %nActiveDigitalChannels = self.Parent.Acquisition.NActiveDigitalChannels ;
+%                 fprintf('\nActive digital channels: %s', num2str(nActiveDigitalChannels));
                 if nActiveDigitalChannels>0 ,
                     if nActiveDigitalChannels<=8
                         dataType = 'uint8';
