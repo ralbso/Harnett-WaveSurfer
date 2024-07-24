@@ -33,7 +33,7 @@ classdef CYGenTLUserClass < ws.UserClass
         
         function wake(self, rootModel)  
             % creates the "user object"
-            rootModel.DataFileLocation = ['D:\ephys\' self.user '\' datestr(now,'yyyymmdd')];
+            rootModel.DataFileLocation = ['D:\ephys\btsp\' datestr(now,'yyyymmdd')];
             if ~exist(rootModel.DataFileLocation, 'dir')
                 mkdir(rootModel.DataFileLocation);
             end
