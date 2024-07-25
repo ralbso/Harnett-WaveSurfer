@@ -38,6 +38,8 @@ classdef CameraAcquisition < handle
             fopen(self.client);
             
             self.cameraSerial = serial(self.cameraTTLPort, 'BaudRate', self.baudRate);
+            fopen(self.cameraSerial);
+            
             self.initializeCamera();
         end % CameraAcquisition init
         
@@ -58,7 +60,7 @@ classdef CameraAcquisition < handle
                 self.camera.FramesPerTrigger = Inf;
                 self.camera.LoggingMode = 'disk';
                 self.camera.FramesAcquiredFcnCount = 1;
-                self.camera.FramesAcquiredFcn = {@frameAcquiredTTL, self.cameraSerial};
+                self.camera.FramesAcquiredFcn = @self.frameAcquiredTTL;
 
                 preview(self.camera);
             end
@@ -101,6 +103,7 @@ classdef CameraAcquisition < handle
         end % safelyStopCamera
         
         function safelyDeleteCamera(self)
+            fclose(self.cameraSerial);
             if ~isempty(self.camera)
                 fprintf('%s Safely deleting camera object\n', self.LineIndicator);
                 if ~isrunning(self.camera)
@@ -139,8 +142,8 @@ classdef CameraAcquisition < handle
             end
         end % readDataFcn
         
-        function frameAcquiredTTL(~, ~, serialCom)
-            fwrite(serialCom, 'a');
+        function frameAcquiredTTL(self, ~, ~)
+            fwrite(self.cameraSerial, 'a');
         end % frameAcquiredTTL
 
     end % methods
