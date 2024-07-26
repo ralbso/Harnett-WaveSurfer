@@ -4,8 +4,13 @@ classdef BehaviorGenTLUserClass < ws.UserClass
         LineIndicator = '  '
         address = '169.254.99.158'
         port = 4545
-        LickDigitalInputChannelIndex = 2
-        RewardZoneDigitalInputChannelIndex = 3
+        
+        % DI
+        lickChannel = 2
+        rewardZoneChannel = 4
+        
+        % DO
+        valveChannel = 1
     end
     
     properties
@@ -23,6 +28,9 @@ classdef BehaviorGenTLUserClass < ws.UserClass
         isCameraInterfaceInitialized_ = false
         isIInFrontend_
         cameraInterface_
+        
+        LastRewardZoneValue_
+        Rewarded_
     end
     
     methods        
@@ -86,6 +94,9 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
             fprintf("\n%s Running protocol: %s.", self.LineIndicator, self.selectedStimulusName);
             
+            self.LastRewardZoneValue_ = 0;
+            self.Rewarded_ = 0;
+            
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
             
@@ -133,9 +144,39 @@ classdef BehaviorGenTLUserClass < ws.UserClass
         
         function dataAvailable(self, wsModel)
             % get digital data
-            digitalData = wsModel.getLatestRawDigitalData();
-            licks = bitget(digitalData,self.LickDigitalInputChannelIndex);
-            rewardZone = bitget(digitalData, self.RewardZoneDigitalInputChannelIndex);
+            digitalData = wsModel.getLatestDIData();
+            licks = bitget(digitalData, self.lickChannel);
+            rewardZone = bitget(digitalData, self.rewardZoneChannel);
+            
+            % did the reward zone end?
+            % The falling edge of the reward zone TTL indicates the reward
+            % window is over, so we can reset our variables
+            rewardZoneOneSampleInPast = [self.LastRewardZoneValue_; rewardZone(1:end-1)];
+            isEndOfRewardZone = ~rewardZone & rewardZoneOneSampleInPast;  % find falling edge
+            didRewardZoneEnd = isscalar(find(isEndOfRewardZone,1));
+            
+            % check if any licks occur in the reward zone
+            if ~isempty(intersect(find(licks), find(rewardZone))) && ~self.Rewarded_
+                % check if valve is off
+                if wsModel.DOChannelStateIfUntimed(self.valveChannel) == 0
+                    wsModel.DOChannelStateIfUntimed(self.valveChannel) = 1;
+                    self.Rewarded_ = 1;
+                end
+            elseif self.Rewarded_
+                wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
+            end
+            
+            if didRewardZoneEnd
+               self.Rewarded_ = 0;
+               
+               % make sure the valve is closed if the reward window is over
+               wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
+               
+               
+            end
+            
+            % Prepare for next iteration
+            self.LastRewardZoneValue_ = rewardZone(end);
         end
         
         %% These methods are called in the looper process
