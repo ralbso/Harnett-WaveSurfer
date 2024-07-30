@@ -14,16 +14,16 @@ classdef GenTLCameraInterface < handle
         function connect(self)
             self.cameraServer = tcpip(self.address_, self.port_, 'NetworkRole', 'server');
             if strcmp(self.cameraServer.Status, 'closed')
-                fprintf('   Establishing connection to camera');
+                fprintf('   Establishing connection to camera...\n');
                 fopen(self.cameraServer);
-                fprintf('   Connection established');
+                fprintf('   Connection established!\n');
             else
-                fprintf('   Connection already established');
+                fprintf('   Connection already established...\n');
             end
         end
 
         function startCapture(self, pipette, sweep)
-            fprintf(['   Starting capture for p' num2str(pipette) '_' num2str(sweep, '%04.f')])
+            fprintf(['   Starting capture for p' num2str(pipette) '_' num2str(sweep, '%04.f') '\n'])
             fwrite(self.cameraServer, [1 pipette sweep])
         end
         
