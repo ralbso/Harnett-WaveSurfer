@@ -40,6 +40,9 @@ classdef BehaviorGenTLUserClass < ws.UserClass
         TimeOfLicks_
         LastTrialLicks_
         TrialIndex_
+        TimeOfRewardZoneStart_
+        TimeOfRewardZoneEnd_
+        IsRewardedTrial_
         
         RasterFig_
         RasterAxes_
@@ -131,8 +134,11 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             self.Rewarded_ = 0;
             self.LastSampleWasITI_ = 0;
             self.TrialSamples_ = 0;
-            self.TrialIndex_ = 1;
+            self.TrialIndex_ = 0;
             self.LastTrialLicks_ = [];
+            self.TimeOfRewardZoneStart_ = [];
+            self.TimeOfRewardZoneEnd_ = [];
+            self.IsRewardedTrial_ = 0;
             
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
@@ -200,13 +206,22 @@ classdef BehaviorGenTLUserClass < ws.UserClass
                 wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
             end
             
+            if ~isempty(find(rewardZone, 1))
+                self.IsRewardedTrial_ = 1;
+            end
+                        
             % === Check if reward zone ended ===
             % The falling edge of the reward zone TTL indicates the reward
             % window is over, so we can reset our variables
             rewardZoneOneSampleInPast = [self.LastRewardZoneValue_; rewardZone(1:end-1)];
 
+            isStartOfRewardZone = rewardZone & ~rewardZoneOneSampleInPast;
+            indexStartOfRewardZone = find(isStartOfRewardZone, 1);
+            didRewardZoneStart = isscalar(indexStartOfRewardZone);
+            
             isEndOfRewardZone = ~rewardZone & rewardZoneOneSampleInPast;  % find falling edge
-            didRewardZoneEnd = isscalar(find(isEndOfRewardZone, 1));
+            indexEndOfRewardZone = find(isEndOfRewardZone, 1);
+            didRewardZoneEnd = isscalar(indexEndOfRewardZone);
             
             if didRewardZoneEnd
                self.Rewarded_ = 0;
@@ -222,35 +237,64 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             % get all continuous segments where screen is off
             props = regionprops(isEndOfTrial, 'PixelIdxList');
             candidateSegments = {props.PixelIdxList};
-            continuousSegments = find(cellfun(@length, candidateSegments) > 400);
+            continuousSegments = find(cellfun(@length, candidateSegments) > 1500);
             isITI = isscalar(continuousSegments);
             % === OK ===
             
             % === Plot licks ===
             % if previous sample was ITI but screen is now on, we've begun
             % a new trial
-            newSamples = size(digitalData, 1);
+            numNewSamples = size(digitalData, 1);
+            newSamplesArr = (1:numNewSamples)';
             if self.LastSampleWasITI_ && ~isITI
                 nLicks = length(self.LastTrialLicks_);
                 
-                plot(self.RasterAxes_,...
-                    reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]',3*nLicks,1)./self.SampleRate_, ...
-                    reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks,1)]', 3*nLicks,1), ...
-                    'k-');
+                if self.IsRewardedTrial_
+                    plot(self.RasterAxes_, ...
+                        reshape([repmat(self.TimeOfRewardZoneStart_, 1, 2) nan(1)]', 3*1, 1) ./ self.SampleRate_, ...
+                        reshape([repmat(self.TrialIndex_+0.5, 1, 1) repmat(self.TrialIndex_-0.5, 1, 1) nan(1,1)]', 3*1, 1), ...
+                        'b-');
+
+                    plot(self.RasterAxes_, ...
+                        reshape([repmat(self.TimeOfRewardZoneEnd_, 1, 2) nan(1)]', 3*1, 1) ./ self.SampleRate_, ...
+                        reshape([repmat(self.TrialIndex_+0.5, 1, 1) repmat(self.TrialIndex_-0.5, 1, 1) nan(1,1)]', 3*1, 1), ...
+                        'b-');
+                    
+                    plot(self.RasterAxes_, ...
+                        reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]', 3*nLicks, 1) ./ self.SampleRate_, ...
+                        reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks, 1)]', 3*nLicks, 1), ...
+                        'k-');
+                else
+                    plot(self.RasterAxes_, ...
+                        reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]', 3*nLicks, 1) ./ self.SampleRate_, ...
+                        reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks, 1)]', 3*nLicks, 1), ...
+                        'r-');
+                end
+                
                 set(self.RasterAxes_, 'XLim', [0 18]);
                 set(self.RasterAxes_, 'YLim', [0.5 self.TrialIndex_+0.5+eps]);
                 set(self.RasterAxes_, 'YTick', 1:self.TrialIndex_);
   
                 % get # of samples collected
-                self.TrialSamples_ = newSamples;
+                self.TrialSamples_ = numNewSamples;
                 
                 % timestamp each lick
-                self.TimeOfLicks_ = self.TrialSamples_(diff(licks)>0);
+                self.TimeOfLicks_ = newSamplesArr(diff(licks)>0);
                 self.TrialIndex_ = self.TrialIndex_ + 1;
+                
+                % new trial, so reset flag
+                self.IsRewardedTrial_ = 0;
+                
             else
-                newSamplesArr = (1:newSamples)';
                 self.TimeOfLicks_ = [self.TimeOfLicks_; self.TrialSamples_ + newSamplesArr(diff(licks)>0)];
-                self.TrialSamples_ = self.TrialSamples_ + newSamples;
+                self.TrialSamples_ = self.TrialSamples_ + numNewSamples;
+                
+                if didRewardZoneStart
+                    self.TimeOfRewardZoneStart_ = self.TrialSamples_ + newSamplesArr(indexStartOfRewardZone);
+                end
+                if didRewardZoneEnd
+                    self.TimeOfRewardZoneEnd_ = self.TrialSamples_ + newSamplesArr(indexEndOfRewardZone);
+                end
             end
             % === OK ===
             
