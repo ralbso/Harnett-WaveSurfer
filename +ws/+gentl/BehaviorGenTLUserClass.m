@@ -28,7 +28,7 @@ classdef BehaviorGenTLUserClass < ws.UserClass
     properties (Access=protected, Transient=true)
         SampleRate_
         
-        isCameraInterfaceInitialized_ = false
+        IsCameraInterfaceInitialized = false
         IsIInFrontend_
         CameraInterface_
         
@@ -79,12 +79,12 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             fprintf('%s Saving files to %s with prefix %s.\n', self.LineIndicator, ...
                 rootModel.DataFileLocation, rootModel.DataFileBaseName);
             
-            self.isIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
-            if self.isIInFrontend_
-                if ~self.isCameraInterfaceInitialized_
-                    self.cameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
-                    self.cameraInterface_.connect;
-                    self.isCameraInterfaceInitialized_ = true;
+            self.IsIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
+            if self.IsIInFrontend_
+                if ~self.IsCameraInterfaceInitialized
+                    self.CameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
+                    self.CameraInterface_.connect;
+                    self.IsCameraInterfaceInitialized = true;
                 end
             end
         end
@@ -137,11 +137,11 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
             
-            if self.isIInFrontend_ && wsModel.IsLoggingEnabled
+            if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
                 try
                     fprintf("\n%s Triggering camera.\n", self.LineIndicator);
                     %s fprintf([num2str(self.pipette) num2str(self.sweep)])
-                    self.cameraInterface_.startCapture(self.pipette, self.sweep);
+                    self.CameraInterface_.startCapture(self.pipette, self.sweep);
                 catch
                     fprintf('\n%s There was an error triggering the camera', self.LineIndicator)
                 end
@@ -149,20 +149,20 @@ classdef BehaviorGenTLUserClass < ws.UserClass
         end
         
         function completingRun(self, wsModel)
-            if self.isIInFrontend_ && wsModel.IsLoggingEnabled
-                self.cameraInterface_.stopCapture;
+            if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
+                self.CameraInterface_.stopCapture;
             end
         end
         
         function stoppingRun(self, wsModel)
-            if self.isIInFrontend_ && wsModel.IsLoggingEnabled
-                self.cameraInterface_.stopCapture;
+            if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
+                self.CameraInterface_.stopCapture;
             end
         end        
         
         function abortingRun(self, wsModel)
-            if self.isIInFrontend_ && wsModel.IsLoggingEnabled
-                self.cameraInterface_.stopCapture;
+            if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
+                self.CameraInterface_.stopCapture;
             end
         end
         
