@@ -45,6 +45,7 @@ classdef BehaviorTestUserClass < ws.UserClass
     properties (Dependent)
         SampleRate
     end
+
     methods        
         function self = BehaviorTestUserClass()
             % creates the "user object"
@@ -303,16 +304,6 @@ classdef BehaviorTestUserClass < ws.UserClass
             end
         end
     end
-    
-%     methods
-%         function out = getPropertyValue(self, name)
-%             out = self.(name);
-%         end
-%         
-%         function setPropertyValue_(self, name, value)
-%             self.(name) = value;
-%         end
-%     end  % protected methods block
     
     methods
         function mimic(self, other)
