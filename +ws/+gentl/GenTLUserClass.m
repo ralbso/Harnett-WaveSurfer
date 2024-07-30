@@ -1,10 +1,11 @@
-classdef RaulGenTLUserClass < ws.UserClass
+classdef GenTLUserClass < ws.UserClass
     
     properties (Constant=true)
-        user = 'Raul'
         LineIndicator = '  '
         address = '169.254.99.158'
         port = 4545
+        LickDigitalInputChannelIndex = 2
+        RewardZoneDigitalInputChannelIndex = 3
     end
     
     properties
@@ -12,7 +13,10 @@ classdef RaulGenTLUserClass < ws.UserClass
         TimeAtStartOfLastRunAsString_ = ''  % can't remove
         
         selectedStimulusIndex = 0
-        selectedStimulusName = ''        
+        selectedStimulusName = ''
+        
+        pipette
+        sweep
     end
     
     properties (Access=protected, Transient=true)
@@ -22,24 +26,29 @@ classdef RaulGenTLUserClass < ws.UserClass
     end
     
     methods        
-        function self = RaulGenTLUserClass()
+        function self = GenTLUserClass()
             % creates the "user object"
-            fprintf("%s Loading preferences.\n", ...
+            fprintf("\n%s Loading preferences.\n", ...
                     self.LineIndicator);
         end
         
         function wake(self, rootModel)  
             % creates the "user object"
-            rootModel.DataFileLocation = ['D:\ephys\' self.user '\' datestr(now,'yyyymmdd')];
+            rootModel.DataFileLocation = ['D:\ephys\btsp\' datestr(now,'yyyymmdd')];
             if ~exist(rootModel.DataFileLocation, 'dir')
                 mkdir(rootModel.DataFileLocation);
             end
             
+            % start new MATLAB instance and create camera object; saves
+            % data to rootModel.DataFileLocation
             system(sprintf('start matlab -nosplash -r "camera = ws.gentl.CameraAcquisition(''%s'');"', ...
                 rootModel.DataFileLocation));
             
             rootModel.DataFileBaseName = 'p';
             rootModel.DoIncludeSessionIndexInDataFileName = 1;
+            
+            self.pipette = rootModel.SessionIndex;
+            self.sweep = rootModel.NextSweepIndex;
             
             fprintf('%s Saving files to %s with prefix %s.\n', self.LineIndicator, ...
                 rootModel.DataFileLocation, rootModel.DataFileBaseName);
@@ -49,10 +58,8 @@ classdef RaulGenTLUserClass < ws.UserClass
                 if ~self.isCameraInterfaceInitialized_
                     self.cameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
                     self.cameraInterface_.connect;
-%                     self.cameraObj = self.cameraInterface_.connect();
                     self.isCameraInterfaceInitialized_ = true;
                 end
-%                 self.cameraObj = establishServer_();
             end
         end
         
@@ -79,13 +86,16 @@ classdef RaulGenTLUserClass < ws.UserClass
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
             fprintf("\n%s Running protocol: %s.", self.LineIndicator, self.selectedStimulusName);
             
+            self.pipette = wsModel.SessionIndex;
+            self.sweep = wsModel.NextSweepIndex;
+            
             if self.isIInFrontend_ && wsModel.IsLoggingEnabled
                 try
                     fprintf("\n%s Triggering camera.\n", self.LineIndicator);
-                    self.cameraInterface_.startCapture;
-    %                 fwrite(self.cameraObj, 1, 'int8');
-                catch me
-                    fprintf(me)
+                    %s fprintf([num2str(self.pipette) num2str(self.sweep)])
+                    self.cameraInterface_.startCapture(self.pipette, self.sweep);
+                catch
+                    fprintf('\n%s There was an error triggering the camera', self.LineIndicator)
                 end
             end
         end
@@ -93,21 +103,18 @@ classdef RaulGenTLUserClass < ws.UserClass
         function completingRun(self, wsModel)
             if self.isIInFrontend_ && wsModel.IsLoggingEnabled
                 self.cameraInterface_.stopCapture;
-%                 fwrite(self.cameraObj, 2, 'int8');
             end
         end
         
         function stoppingRun(self, wsModel)
             if self.isIInFrontend_ && wsModel.IsLoggingEnabled
                 self.cameraInterface_.stopCapture;
-%                 fwrite(self.cameraObj, 2, 'int8');
             end
         end        
         
         function abortingRun(self, wsModel)
             if self.isIInFrontend_ && wsModel.IsLoggingEnabled
                 self.cameraInterface_.stopCapture;
-%                 fwrite(self.cameraObj, 2, 'int8');
             end
         end
         
@@ -125,6 +132,10 @@ classdef RaulGenTLUserClass < ws.UserClass
         end        
         
         function dataAvailable(self, wsModel) %#ok<INUSD>
+              % get digital data
+%             digitalData = wsModel.getLatestRawDigitalData();
+%             licks = bitget(digitalData,self.LickDigitalInputChannelIndex);
+%             rewardZone = bitget(digitalData, self.RewardZoneDigitalInputChannelIndex);
         end
         
         %% These methods are called in the looper process
@@ -146,28 +157,3 @@ classdef RaulGenTLUserClass < ws.UserClass
     end  % methods
     
 end  % classdef
-
-% function server = establishServer_()
-%     [~, hostname] = system('hostname');
-%     hostname = string(strtrim(hostname));
-%     address = resolvehost(hostname, 'address');
-%     server = tcpip(address, 4545, 'NetworkRole', 'server');
-% 
-%     if strcmp(server.Status, 'closed')
-%         fprintf('   Establishing connection to camera');
-%         fopen(server);
-%         fprintf('   Connection established');
-%     else
-%         fprintf('   Connection already established');
-%     end
-% 
-% end
-% 
-% function safelyCloseServer_(server)
-%     if server.BytesToOutput == 0
-%         fclose(server);
-%     else
-%         pause(0.05);
-%         fclose(server);
-%     end
-% end

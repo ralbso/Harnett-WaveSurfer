@@ -1,17 +1,5 @@
 classdef Acquisition < ws.Subsystem
     
-    properties (Dependent = true)
-        %Duration   % s
-        %SampleRate  % Hz
-%         IsAnalogChannelActive
-%         IsDigitalChannelActive
-%           % boolean arrays indicating which analog/digital channels are active
-%           % Setting these is the prefered way for outsiders to change which
-%           % channels are active
-%         IsAnalogChannelMarkedForDeletion
-%         IsDigitalChannelMarkedForDeletion
-    end
-    
     properties (Dependent = true, SetAccess = immutable)  % N.B.: it's not settable, but it can change over the lifetime of the object
         %DeviceNames  % the device ID of the NI board for each channel, a cell array of strings
         AnalogDeviceNames  % the device ID of the NI board for each channel, a cell array of strings
@@ -41,20 +29,6 @@ classdef Acquisition < ws.Subsystem
         DataCacheDurationWhenContinuous
         ActiveChannelIndexFromChannelIndex
     end
-    
-%     properties (Dependent=true, Hidden=true)        
-%         AnalogChannelScales
-%           % An array of scale factors to convert each analog channel from volts on the coax to 
-%           % whatever native units each signal corresponds to in the world.
-%           % This is in units of volts per ChannelUnits (see below)        
-%           % Hidden b/c the values given by it can be overridden by the
-%           % ElectrodeManager.
-%         AnalogChannelUnits
-%           % A list of SIUnit instances that describes the real-world units 
-%           % for each analog channel.
-%           % Hidden b/c the values given by it can be overridden by the
-%           % ElectrodeManager.
-%     end
     
     properties (Access = protected) 
         SampleRate_ = 20000  % Hz
