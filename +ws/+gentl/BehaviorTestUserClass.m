@@ -4,6 +4,7 @@ classdef BehaviorTestUserClass < ws.UserClass
         LineIndicator = '  '
 %         address = '169.254.99.158'
 %         port = 4545
+        screenChannel = 1
         lickChannel = 2
         rewardZoneChannel = 4
         
@@ -21,15 +22,29 @@ classdef BehaviorTestUserClass < ws.UserClass
         sweep
     end
     
-    properties (Access=protected, Transient=true)
+    properties (Access = protected, Transient = true)
+        SampleRate_
+        
         isCameraInterfaceInitialized_ = false
         IsIInFrontend_
         CameraInterface_
         
+        LastScreenValue_
         LastRewardZoneValue_
         Rewarded_
+        LastSampleWasITI_
+        TrialSamples_
+        TimeOfLicks_
+        LastTrialLicks_
+        TrialIndex_
+        
+        RasterFig_
+        RasterAxes_
     end
     
+    properties (Dependent)
+        SampleRate
+    end
     methods        
         function self = BehaviorTestUserClass()
             % creates the "user object"
@@ -43,6 +58,8 @@ classdef BehaviorTestUserClass < ws.UserClass
             if ~exist(rootModel.DataFileLocation, 'dir')
                 mkdir(rootModel.DataFileLocation);
             end
+            
+            self.synchronizeTransientStateToPersistentStateAndRootModel_(rootModel);
             
             % start new MATLAB instance and create camera object; saves
             % data to rootModel.DataFileLocation
@@ -68,12 +85,18 @@ classdef BehaviorTestUserClass < ws.UserClass
 %             end
         end
         
-        function delete(self)  %#ok<INUSD>
+        function delete(self)
             % Called when there are no more references to the object, just
             % prior to its memory being freed.
             % this method is called by the refiller as well, so anything in
             % here will get executed when the refiller clears its memory
             % between runs
+            if ~isempty(self.RasterFig_)
+                if ishghandle(self.RasterFig_)
+                    close(self.RasterFig_);
+                end
+                self.RasterFig_ = [];
+            end  
 %             fprintf("%s Closing WaveSurfer.\n", self.LineIndicator);
 %             fwrite(self.cameraObj, 3);
 %             safelyCloseServer_(cameraObj);
@@ -85,14 +108,25 @@ classdef BehaviorTestUserClass < ws.UserClass
                     self.LineIndicator, wsModel.AbsoluteProtocolFileName);
         end
         
+        function result = get.SampleRate(self) 
+            result = self.SampleRate_ ;
+        end
+        
         %% Called every time acq starts or stops/aborts/completes
         function startingRun(self, wsModel)
             self.selectedStimulusIndex = int32(wsModel.stimulusLibrary.SelectedOutputableIndex);
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
             fprintf("%s > Running protocol: %s.\n", self.LineIndicator, self.selectedStimulusName);
             
+            self.synchronizeTransientStateToPersistentStateAndRootModel_(wsModel);
+            
+            self.LastScreenValue_ = 0;
             self.LastRewardZoneValue_ = 0;
             self.Rewarded_ = 0;
+            self.LastSampleWasITI_ = 0;
+            self.TrialSamples_ = 0;
+            self.TrialIndex_ = 1;
+            self.LastTrialLicks_ = [];
             
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
@@ -140,19 +174,16 @@ classdef BehaviorTestUserClass < ws.UserClass
         end        
         
         function dataAvailable(self, wsModel)
+            % Called each time a "chunk" of data (typically 100 ms worth)
+            % has been accumulated from the looper.
+            
             % get digital data
             digitalData = wsModel.getLatestDIData();
+            screen = bitget(digitalData, self.screenChannel);
             licks = bitget(digitalData, self.lickChannel);
             rewardZone = bitget(digitalData, self.rewardZoneChannel);
             
-            % did the reward zone end?
-            % The falling edge of the reward zone TTL indicates the reward
-            % window is over, so we can reset our variables
-            rewardZoneOneSampleInPast = [self.LastRewardZoneValue_; rewardZone(1:end-1)];
-            isEndOfRewardZone = ~rewardZone & rewardZoneOneSampleInPast;  % find falling edge
-            didRewardZoneEnd = isscalar(find(isEndOfRewardZone,1));
-            
-            % check if any licks occur in the reward zone
+            % check if any licks occur in the reward zone and open valve
             if ~isempty(intersect(find(licks), find(rewardZone))) && ~self.Rewarded_
                 % check if valve is off
                 if wsModel.DOChannelStateIfUntimed(self.valveChannel) == 0
@@ -163,17 +194,65 @@ classdef BehaviorTestUserClass < ws.UserClass
                 wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
             end
             
+            % === Check if reward zone ended ===
+            % The falling edge of the reward zone TTL indicates the reward
+            % window is over, so we can reset our variables
+            rewardZoneOneSampleInPast = [self.LastRewardZoneValue_; rewardZone(1:end-1)];
+
+            isEndOfRewardZone = ~rewardZone & rewardZoneOneSampleInPast;  % find falling edge
+            didRewardZoneEnd = isscalar(find(isEndOfRewardZone, 1));
+            
             if didRewardZoneEnd
                self.Rewarded_ = 0;
-               
                % make sure the valve is closed if the reward window is over
                wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
-               
-               
             end
+            % === OK ===
+            
+            % === Check if the trial ended so we can plot it ===
+            screenOneSampleInPast = [self.LastScreenValue_; screen(1:end-1)];
+            isEndOfTrial = ~screen & ~screenOneSampleInPast;
+            
+            % get all continuous segments where screen is off
+            props = regionprops(isEndOfTrial, 'PixelIdxList');
+            candidateSegments = {props.PixelIdxList};
+            continuousSegments = find(cellfun(@length, candidateSegments) > 400);
+            isITI = isscalar(continuousSegments);
+            % === OK ===
+            
+            % === Plot licks ===
+            % if previous sample was ITI but screen is now on, we've begun
+            % a new trial
+            newSamples = size(digitalData, 1);
+            if self.LastSampleWasITI_ && ~isITI
+                nLicks = length(self.LastTrialLicks_);
+                
+                plot(self.RasterAxes_,...
+                    reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]',3*nLicks,1)./self.SampleRate_, ...
+                    reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks,1)]', 3*nLicks,1), ...
+                    'k-');
+                set(self.RasterAxes_, 'XLim', [0 18]);
+                set(self.RasterAxes_, 'YLim', [0.5 self.TrialIndex_+0.5+eps]);
+                set(self.RasterAxes_, 'YTick', 1:self.TrialIndex_);
+  
+                % get # of samples collected
+                self.TrialSamples_ = newSamples;
+                
+                % timestamp each lick
+                self.TimeOfLicks_ = self.TrialSamples_(diff(licks)>0);
+                self.TrialIndex_ = self.TrialIndex_ + 1;
+            else
+                newSamplesArr = (1:newSamples)';
+                self.TimeOfLicks_ = [self.TimeOfLicks_; self.TrialSamples_ + newSamplesArr(diff(licks)>0)];
+                self.TrialSamples_ = self.TrialSamples_ + newSamples;
+            end
+            % === OK ===
             
             % Prepare for next iteration
             self.LastRewardZoneValue_ = rewardZone(end);
+            self.LastScreenValue_ = screen(end);
+            self.LastSampleWasITI_ = isITI;
+            self.LastTrialLicks_ = self.TimeOfLicks_;
         end
         
         %% These methods are called in the looper process
@@ -195,16 +274,60 @@ classdef BehaviorTestUserClass < ws.UserClass
     end  % methods
     
     methods
-        function syncRasterFigAndAxes_(self, wsModel)
+        function syncRasterFigAndAxes_(self)
             if isempty(self.RasterFig_) || ~ishghandle(self.RasterFig_)
                 self.RasterFig_ = figure('Name', 'Lick Raster', 'NumberTitle', 'off', 'Units', 'pixels');
-                set(self.RasterFig_, 'position', [807 85 542 901]);
+                set(self.RasterFig_, 'position', [0 85 450 400]);
             end
             
             clf(self.RasterFig_);
             
-            self.RasterAxes_ = subplot(
+            self.RasterAxes_ = subplot(1, 2, [1 2], 'parent', self.RasterFig_);
+            hold(self.RasterAxes_, 'on');
+            axis(self.RasterAxes_, 'ij');
+            ylabel(self.RasterAxes_, 'trial #');
+            title(self.RasterAxes_, 'Licks');
+            xlabel(self.RasterAxes_, 'time (s)');
+            set(self.RasterAxes_, 'YLim', [0.5 1.5 + eps]);
+            set(self.RasterAxes_, 'YTick', 1);
         end
     end  % methods
+    
+    methods (Access=protected)
+        function synchronizeTransientStateToPersistentStateAndRootModel_(self, rootModel)
+            if isa(rootModel, 'ws.WavesurferModel')
+                self.SampleRate_ = rootModel.AcquisitionSampleRate;
+                if rootModel.IsITheOneTrueWavesurferModel
+                    self.syncRasterFigAndAxes_;
+                end
+            end
+        end
+    end
+    
+%     methods
+%         function out = getPropertyValue(self, name)
+%             out = self.(name);
+%         end
+%         
+%         function setPropertyValue_(self, name, value)
+%             self.(name) = value;
+%         end
+%     end  % protected methods block
+    
+    methods
+        function mimic(self, other)
+            ws.mimicBang(self, other);
+        end
+    end
+    
+    methods
+        function result = get(self, propertyName)
+            result = self.(propertyName);
+        end
+        
+        function set(self, propertyName, newValue)
+            self.(propertyName) = newValue;
+        end
+    end  % public methods block
     
 end  % classdef
