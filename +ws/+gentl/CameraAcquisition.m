@@ -47,13 +47,18 @@ classdef CameraAcquisition < handle
             if isempty(self.camera)
                 % connection takes time; give some feedback
                 fprintf('%s Setting up camera\n', self.LineIndicator);
-                self.camera = videoinput('gentl', 1, 'Mono8');
+                % 08/07/2025: ignore dropped frames, keep acquiring
+                %(might help prevent camera crashes)
+                imaqmex('feature', '-gigeDisablePacketResend', true);
+                self.camera = videoinput('gige', 1, 'Mono8');
                 fprintf('%s Camera connection established\n', self.LineIndicator);
                 self.camera.ROIPosition = self.roiPosition;
                 
                 src = self.camera.Source;
                 src.ExposureTime = self.exposureTime;
                 src.AcquisitionFrameRate = self.frameRate;
+                src.PacketDelay = 34;
+                src.PacketSize = 9000;
 
                 config = triggerinfo(self.camera);
                 triggerconfig(self.camera, config(2));
@@ -86,10 +91,6 @@ classdef CameraAcquisition < handle
                 elseif isrunning(self.camera) && ~islogging(self.camera)
                     trigger(self.camera);
                 end
-                triggerTime = self.camera.InitialTriggerTime;
-                fileID = fopen([fpath '.txt'], 'wt');
-                fprintf(fileID, datestr(triggerTime, 'HH:MM:SS.FFF'));
-                fclose(fileID);
             end
         end % beginCameraAcquisition
         
@@ -97,7 +98,39 @@ classdef CameraAcquisition < handle
             if ~isempty(self.camera)
                 fprintf('%s Safely stopping camera\n', self.LineIndicator);
                 if isrunning(self.camera)
+%                     fprintf('%s Closing camera\n', self.LineIndicator);
                     stop(self.camera)
+%                     wait(self.camera, 1)  % ADDED 11/07/2024 RM
+                    fprintf('%s Stopped camera\n', self.LineIndicator);
+                    % ADDED 11/07/2024 RM
+                    % These lines should help keep the camera from
+                    % crashing, but it needs further testing
+%                     cnt = 1;
+%                     while (self.camera.FramesAcquired ~= self.camera.DiskLoggerFrameCount)
+%                         cnt = cnt + 1;
+%                         pause(.1)
+%                         if cnt > 10
+%                             break
+%                         end
+%                     end
+                    fprintf('%s Logged %d/%d frames\n', self.LineIndicator, self.camera.DiskLoggerFrameCount, self.camera.FramesAcquired)
+                    % END ADDITION
+                    % ADDED 11/08/2024 RM
+                    % Closing the logger is creating issues sometimes,
+                    % after which script needs to be reboot. Hopefully this
+                    % catches the error and allows us to record the next
+                    % file.
+%                     try
+%                         close(self.camera.DiskLogger)
+%                         fprintf('%s Closed disklogger\n\n', self.LineIndicator);
+%                     catch
+%                         pause(.1)
+%                         close(self.camera.DiskLogger)
+%                         fprintf('%s Error, closed disklogger\n\n', self.LineIndicator);
+%                         self.client.BytesAvailableFcnMode = 'byte';
+%                         self.client.BytesAvailableFcnCount = self.bytesAvailableCnt;
+%                         self.client.BytesAvailableFcn = @self.readDataFcn;
+%                     end
                 end
             end
         end % safelyStopCamera
@@ -117,9 +150,10 @@ classdef CameraAcquisition < handle
                     closepreview(self.camera)
                     stop(self.camera)
                     delete(self.camera)
+                    clear(self.camera)
                     
                     if strcmp(self.client.status, 'open')
-                        fclose(sefl.client);
+                        fclose(self.client);
                     end
                 end
             end

@@ -4,8 +4,6 @@ classdef GenTLUserClass < ws.UserClass
         LineIndicator = '  '
         address = '169.254.99.158'
         port = 4545
-        LickDigitalInputChannelIndex = 2
-        RewardZoneDigitalInputChannelIndex = 3
     end
     
     properties
@@ -132,10 +130,6 @@ classdef GenTLUserClass < ws.UserClass
         end        
         
         function dataAvailable(self, wsModel) %#ok<INUSD>
-              % get digital data
-%             digitalData = wsModel.getLatestRawDigitalData();
-%             licks = bitget(digitalData,self.LickDigitalInputChannelIndex);
-%             rewardZone = bitget(digitalData, self.RewardZoneDigitalInputChannelIndex);
         end
         
         %% These methods are called in the looper process

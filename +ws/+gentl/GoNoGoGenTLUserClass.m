@@ -1,17 +1,19 @@
-classdef BehaviorGenTLUserClass < ws.UserClass
+classdef GoNoGoGenTLUserClass < ws.UserClass
     
     properties (Constant=true)
         LineIndicator = '  '
         address = '169.254.99.158'
         port = 4545
         
-        % DI
+        % DI 
         screenChannel = 1
         lickChannel = 2
         rewardZoneChannel = 4
+        distractorChannel = 6
         
         % DO
         valveChannel = 1
+        penaltyChannel = 2
     end
     
     properties
@@ -53,7 +55,7 @@ classdef BehaviorGenTLUserClass < ws.UserClass
     end
     
     methods        
-        function self = BehaviorGenTLUserClass()
+        function self = GoNoGoGenTLUserClass()
             % creates the "user object"
             fprintf("\n%s Loading preferences.\n", ...
                     self.LineIndicator);
@@ -105,10 +107,6 @@ classdef BehaviorGenTLUserClass < ws.UserClass
                 end
                 self.RasterFig_ = [];
             end
-
-%             fprintf("%s Closing WaveSurfer.\n", self.LineIndicator);
-%             fwrite(self.cameraObj, 3);
-%             safelyCloseServer_(cameraObj);
         end
         
         %% These methods are called in the frontend process
@@ -194,21 +192,44 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             screen = bitget(digitalData, self.screenChannel);
             licks = bitget(digitalData, self.lickChannel);
             rewardZone = bitget(digitalData, self.rewardZoneChannel);
+            isDistractor = bitget(digitalData, self.distractorChannel);
+            
+            if find(isDistractor)
+                isDistractorFlag = 1;
+            else
+                isDistractorFlag = 0;
+            end
+            
+%             fprintf('\nDistractor: %d', isDistractorFlag)
+%             fprintf('Licks + Rew: %d', ~isempty(intersect(find(licks), find(rewardZone))))
             
             % check if any licks occur in the reward zone and open valve
-            if ~isempty(intersect(find(licks), find(rewardZone))) && ~self.Rewarded_
+            if ~isempty(intersect(find(licks), find(rewardZone))) && ~isDistractorFlag && ~self.Rewarded_
                 % check if valve is off
                 if wsModel.DOChannelStateIfUntimed(self.valveChannel) == 0
                     wsModel.DOChannelStateIfUntimed(self.valveChannel) = 1;
+                    wsModel.DOChannelStateIfUntimed(self.penaltyChannel) = 0;
+                    
                     self.Rewarded_ = 1;
+                    self.IsRewardedTrial_ = 1;
                 end
+                
+            elseif ~isempty(intersect(find(licks), find(rewardZone))) && isDistractorFlag
+                %disp('Penalized')
+                wsModel.DOChannelStateIfUntimed(self.penaltyChannel) = 1;
+                
+            elseif isempty(intersect(find(licks), find(rewardZone))) && isDistractorFlag
+                %disp('Not penalized')
+                wsModel.DOChannelStateIfUntimed(self.penaltyChannel) = 0;
+                
             elseif self.Rewarded_
                 wsModel.DOChannelStateIfUntimed(self.valveChannel) = 0;
+%                 wsModel.DOChannelStateIfUntimed(self.penaltyChannel) = 0;
             end
-            
-            if ~isempty(find(rewardZone, 1))
-                self.IsRewardedTrial_ = 1;
-            end
+%             
+%             if ~isempty(find(rewardZone, 1))
+%                 self.IsRewardedTrial_ = 1;
+%             end
                         
             % === Check if reward zone ended ===
             % The falling edge of the reward zone TTL indicates the reward
@@ -266,10 +287,22 @@ classdef BehaviorGenTLUserClass < ws.UserClass
 %                         'k-');
 %                 else
 %                     plot(self.RasterAxes_, ...
+%                         reshape([repmat(self.TimeOfRewardZoneStart_, 1, 2) nan(1)]', 3*1, 1) ./ self.SampleRate_, ...
+%                         reshape([repmat(self.TrialIndex_+0.5, 1, 1) repmat(self.TrialIndex_-0.5, 1, 1) nan(1,1)]', 3*1, 1), ...
+%                         'r-');
+% 
+%                     plot(self.RasterAxes_, ...
+%                         reshape([repmat(self.TimeOfRewardZoneEnd_, 1, 2) nan(1)]', 3*1, 1) ./ self.SampleRate_, ...
+%                         reshape([repmat(self.TrialIndex_+0.5, 1, 1) repmat(self.TrialIndex_-0.5, 1, 1) nan(1,1)]', 3*1, 1), ...
+%                         'r-');
+% %                         reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]', 3*nLicks, 1) ./ self.SampleRate_, ...
+% %                         reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks, 1)]', 3*nLicks, 1), ...
+% %                         'r-');
+%                     plot(self.RasterAxes_, ...
 %                         reshape([repmat(self.LastTrialLicks_,1,2) nan(nLicks,1)]', 3*nLicks, 1) ./ self.SampleRate_, ...
 %                         reshape([repmat(self.TrialIndex_+0.5, nLicks, 1) repmat(self.TrialIndex_-0.5, nLicks, 1) nan(nLicks, 1)]', 3*nLicks, 1), ...
-%                         'r-');
-%                  end
+%                         'k-');
+%                 end
 %                 
 %                 set(self.RasterAxes_, 'XLim', [0 18]);
 %                 set(self.RasterAxes_, 'YLim', [0.5 self.TrialIndex_+0.5+eps]);
