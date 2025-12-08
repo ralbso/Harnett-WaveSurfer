@@ -1,4 +1,4 @@
-classdef GoNoGoGenTLUserClass < ws.UserClass
+classdef GoNoGoCameraUserClass < ws.UserClass
     
     properties (Constant=true)
         LineIndicator = '  '
@@ -55,7 +55,7 @@ classdef GoNoGoGenTLUserClass < ws.UserClass
     end
     
     methods        
-        function self = GoNoGoGenTLUserClass()
+        function self = GoNoGoCameraUserClass()
             % creates the "user object"
             fprintf("\n%s Loading preferences.\n", ...
                     self.LineIndicator);
@@ -72,7 +72,7 @@ classdef GoNoGoGenTLUserClass < ws.UserClass
             
             % start new MATLAB instance and create camera object; saves
             % data to rootModel.DataFileLocation
-            system(sprintf('start matlab -nosplash -nodesktop -r "camera = ws.gentl.CameraAcquisition(''%s'');"', ...
+            system(sprintf('start matlab -nosplash -nodesktop -r "camera = ws.cam.CameraAcquisition(''%s'');"', ...
                 rootModel.DataFileLocation));
             
             rootModel.DataFileBaseName = 'p';
@@ -87,7 +87,7 @@ classdef GoNoGoGenTLUserClass < ws.UserClass
             self.IsIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
             if self.IsIInFrontend_
                 if ~self.IsCameraInterfaceInitialized
-                    self.CameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
+                    self.CameraInterface_ = ws.cam.CameraInterface(self.address, self.port);
                     self.CameraInterface_.connect;
                     self.IsCameraInterfaceInitialized = true;
                 end

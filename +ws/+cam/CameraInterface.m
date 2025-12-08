@@ -1,4 +1,4 @@
-classdef GenTLCameraInterface < handle
+classdef CameraInterface < handle
     properties (SetAccess=protected)
         address_ = ''
         port_ = []
@@ -6,7 +6,7 @@ classdef GenTLCameraInterface < handle
     end
     
     methods
-        function self = GenTLCameraInterface(address, port)
+        function self = CameraInterface(address, port)
             self.address_ = address;
             self.port_ = port;
         end

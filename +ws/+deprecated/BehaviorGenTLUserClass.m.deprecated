@@ -70,7 +70,7 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             
             % start new MATLAB instance and create camera object; saves
             % data to rootModel.DataFileLocation
-            system(sprintf('start matlab -nosplash -nodesktop -r "camera = ws.gentl.CameraAcquisition(''%s'');"', ...
+            system(sprintf('start matlab -nosplash -nodesktop -r "camera = ws.cam.CameraAcquisition(''%s'');"', ...
                 rootModel.DataFileLocation));
             
             rootModel.DataFileBaseName = 'p';
@@ -85,7 +85,7 @@ classdef BehaviorGenTLUserClass < ws.UserClass
             self.IsIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
             if self.IsIInFrontend_
                 if ~self.IsCameraInterfaceInitialized
-                    self.CameraInterface_ = ws.gentl.GenTLCameraInterface(self.address, self.port);
+                    self.CameraInterface_ = ws.cam.GenTLCameraInterface(self.address, self.port);
                     self.CameraInterface_.connect;
                     self.IsCameraInterfaceInitialized = true;
                 end
