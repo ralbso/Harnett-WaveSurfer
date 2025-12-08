@@ -1,4 +1,4 @@
-classdef GenTLUserClass < ws.UserClass
+classdef CameraUserClass < ws.UserClass
     
     properties (Constant=true)
         LineIndicator = '  '
@@ -24,7 +24,7 @@ classdef GenTLUserClass < ws.UserClass
     end
     
     methods        
-        function self = GenTLUserClass()
+        function self = CameraUserClass()
             % creates the "user object"
             fprintf("\n%s Loading preferences.\n", ...
                     self.LineIndicator);
