@@ -191,6 +191,8 @@ function dataFileAsStruct = loadDataFile(filename, formatString, tMin, tMax, min
             else
                 if ispc() ,
                     scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMex(analogDataAsCounts, analogChannelScales, analogScalingCoefficients) ;
+                elseif isunix() ,
+                    scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMexUbuntu(analogDataAsCounts, analogChannelScales, analogScalingCoefficients) ;
                 else
                     scaledAnalogData = ws.scaledDoubleAnalogDataFromRaw(analogDataAsCounts, analogChannelScales, analogScalingCoefficients) ;
                 end                    
