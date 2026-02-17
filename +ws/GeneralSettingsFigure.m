@@ -795,8 +795,8 @@ classdef GeneralSettingsFigure < ws.MCOSFigureWithSelfControl
             set(self.NextSweepEdit, 'String', sprintf('%d',model.NextSweepIndex));
             if ~isIdle&&model.IsLoggingEnabled ,
                 set(self.FileNameEdit, 'String', model.CurrentRunAbsoluteFileName);
-                set(self.FileNameEdit, 'TooltipString', model.CurrentRunAbsoluteFileName);
-                set(self.FileNameText, 'TooltipString', model.CurrentRunAbsoluteFileName);
+                set(self.FileNameEdit, 'TooltipString', string(model.CurrentRunAbsoluteFileName));
+                set(self.FileNameText, 'TooltipString', string(model.CurrentRunAbsoluteFileName));
             else
                 set(self.FileNameEdit, 'String', model.NextRunAbsoluteFileName);
                 set(self.FileNameEdit, 'TooltipString', model.NextRunAbsoluteFileName);
