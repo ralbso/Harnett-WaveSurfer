@@ -9,7 +9,7 @@ classdef Opto < ws.UserClass
         screenChannel = 1
         
         % Digital Outputs
-        LEDChannel = 6
+%         LEDChannel = 6
     end
     
     properties
@@ -33,7 +33,7 @@ classdef Opto < ws.UserClass
         CameraInterface_
         
         % variables to keep track of
-        LastLEDValue_
+%         LastLEDValue_
     end
 
     properties (Dependent=true)
@@ -129,7 +129,7 @@ classdef Opto < ws.UserClass
             self.synchronizeTransientStateToPersistentStateAndRootModel_(wsModel);
             
             % preset/reset variables to keep track of during a sweep
-            self.LastLEDValue_ = 0;
+%             self.LastLEDValue_ = 0;
 %             self.LastScreenValue_ = 0;
 %             self.LastRewardZoneValue_ = 0;
 %             self.Rewarded_ = 0;
@@ -146,11 +146,11 @@ classdef Opto < ws.UserClass
             self.A = exp((1/self.SampleRate_)/tau);
             
             % reset states
-            self.PreviousMV = -70;  % filtered Vm state (mV)
-            self.LEDOn = 0;         % current LED state
-
-            self.SamplesSinceOn = int32(1e9);
-            self.SamplesSinceOff = int32(1e9);
+%             self.PreviousMV = -70;  % filtered Vm state (mV)
+%             self.LEDOn = 0;         % current LED state
+% 
+%             self.SamplesSinceOn = int32(1e9);
+%             self.SamplesSinceOff = int32(1e9);
             
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
@@ -204,18 +204,18 @@ classdef Opto < ws.UserClass
         
         % Called each time a "chunk" of data (typically 100 ms worth)
         % has been accumulated from the looper.
-        function dataAvailable(self, wsModel)
+        function dataAvailable(self, wsModel) %#ok<INUSD>
             % get data
-            analogData = wsModel.getLatestAIData();
-            digitalData = wsModel.getLatestDIData();
-            
-            % decode digital inputs
-            led = bitget(digitalData, self.ledChannel);
-            ledOneSampleInPast = [self.LastLEDValue_; led(1:end-1)];
-            
-            % analyze voltage signal
-            v = analogData(:, self.VoltageChannel);
-            dt = 1/self.SampleRate_;
+%             analogData = wsModel.getLatestAIData();
+%             digitalData = wsModel.getLatestDIData();
+%             
+%             % decode digital inputs
+%             led = bitget(digitalData, self.ledChannel);
+%             ledOneSampleInPast = [self.LastLEDValue_; led(1:end-1)];
+%             
+%             % analyze voltage signal
+%             v = analogData(:, self.VoltageChannel);
+%             dt = 1/self.SampleRate_;
             
         end
         
