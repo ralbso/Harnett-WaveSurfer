@@ -142,8 +142,8 @@ classdef Opto < ws.UserClass
 %             self.IsRewardedTrial_ = 0;
 
             % derive Vm coefficient from tau
-            tau = self.Tau / 1000;  % ms -> s
-            self.A = exp((1/self.SampleRate_)/tau);
+%             tau = self.Tau / 1000;  % ms -> s
+%             self.A = exp((1/self.SampleRate_)/tau);
             
             % reset states
 %             self.PreviousMV = -70;  % filtered Vm state (mV)
