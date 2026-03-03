@@ -89,7 +89,7 @@ classdef Opto < ws.UserClass
             end
         end
         
-        function delete(self)
+        function delete(self) %#ok<INUSD>
             % Called when there are no more references to the object, just
             % prior to its memory being freed.
             % this method is called by the refiller as well, so anything in
@@ -97,12 +97,12 @@ classdef Opto < ws.UserClass
             % between runs
             
             % if figure is open, close it
-            if ~isempty(self.RasterFig_)
-                if ishghandle(self.RasterFig_)
-                    close(self.RasterFig_);
-                end
-                self.RasterFig_ = [];
-            end
+%             if ~isempty(self.RasterFig_)
+%                 if ishghandle(self.RasterFig_)
+%                     close(self.RasterFig_);
+%                 end
+%                 self.RasterFig_ = [];
+%             end
         end
         
         %% These methods are called in the frontend process
