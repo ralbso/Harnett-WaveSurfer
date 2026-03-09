@@ -14,11 +14,11 @@ classdef CameraInterface < handle
         function connect(self)
             self.cameraServer = tcpip(self.address_, self.port_, 'NetworkRole', 'server');
             if strcmp(self.cameraServer.Status, 'closed')
-                fprintf('   Establishing connection to camera...\n');
+                fprintf('   Opening camera server...\n');
                 fopen(self.cameraServer);
-                fprintf('   Connection established!\n');
+                fprintf('   Server established!\n');
             else
-                fprintf('   Connection already established...\n');
+                fprintf('   Server already established...\n');
             end
         end
 

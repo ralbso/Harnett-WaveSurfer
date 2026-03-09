@@ -25,7 +25,7 @@ classdef Opto < ws.UserClass
     
     properties (Access=protected, Transient=true)
         % initialize user-settable parameters
-        SampleRate_
+%         SampleRate_
         
         % camera-related properties
         IsCameraInterfaceInitialized = false
@@ -38,7 +38,7 @@ classdef Opto < ws.UserClass
 
     properties (Dependent=true)
         % initialize persistent variables
-        SampleRate
+%         SampleRate
     end
     
     methods        
@@ -57,14 +57,14 @@ classdef Opto < ws.UserClass
             end
             
             % initialize synchronization
-            self.synchronizeTransientStateToPersistentStateAndRootModel_(rootModel);
+%             self.synchronizeTransientStateToPersistentStateAndRootModel_(rootModel);
             
             % start new MATLAB instance and create camera object there
             % saves data to the rootModel.DataFileLocation specified above
             system(sprintf('start matlab -nosplash -nodesktop -r "camera = ws.cam.CameraAcquisition(''%s'');"', ...
                 rootModel.DataFileLocation));
             
-            % define default file base name (prefix 'p')
+            % define default file base name (prefix 'p' for pipet/pipette)
             rootModel.DataFileBaseName = 'p';
             % include index in base name (suffix)
             rootModel.DoIncludeSessionIndexInDataFileName = 1;
@@ -82,9 +82,10 @@ classdef Opto < ws.UserClass
             self.IsIInFrontend_ = (isa(rootModel,'ws.WavesurferModel') && rootModel.IsITheOneTrueWavesurferModel);
             if self.IsIInFrontend_
                 if ~self.IsCameraInterfaceInitialized
+                    % start interface object and create server
                     self.CameraInterface_ = ws.cam.CameraInterface(self.address, self.port);
-                    self.CameraInterface_.connect;
-                    self.IsCameraInterfaceInitialized = true;
+                    self.CameraInterface_.connect();
+                    self.IsCameraInterfaceInitialized = true;  % set flag
                 end
             end
         end
@@ -112,10 +113,10 @@ classdef Opto < ws.UserClass
                     self.LineIndicator, wsModel.AbsoluteProtocolFileName);
         end
 
-        function result = get.SampleRate(self)
-            % get the user-defined sample rate
-            result = self.SampleRate_;
-        end
+%         function result = get.SampleRate(self)
+%             % get the user-defined sample rate
+%             result = self.SampleRate_;
+%         end
         
         %% Called every time acq starts or stops/aborts/completes
         function startingRun(self, wsModel)
@@ -123,10 +124,10 @@ classdef Opto < ws.UserClass
             % inform the user
             self.selectedStimulusIndex = int32(wsModel.stimulusLibrary.SelectedOutputableIndex);
             self.selectedStimulusName = wsModel.stimulusLibrary.Sequences{self.selectedStimulusIndex}.Name;
-            fprintf("%s > Running protocol: %s.\n", self.LineIndicator, self.selectedStimulusName);
+            fprintf("%s > Stimulus: %s\n", self.LineIndicator, self.selectedStimulusName);
             
             % synchronize
-            self.synchronizeTransientStateToPersistentStateAndRootModel_(wsModel);
+%             self.synchronizeTransientStateToPersistentStateAndRootModel_(wsModel);
             
             % preset/reset variables to keep track of during a sweep
 %             self.LastLEDValue_ = 0;
@@ -155,13 +156,14 @@ classdef Opto < ws.UserClass
             self.pipette = wsModel.SessionIndex;
             self.sweep = wsModel.NextSweepIndex;
             
-            % trigger camera after starting recording 
+            % trigger camera after starting recording (but not when hitting
+            % 'play')
             if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
                 try
-                    fprintf("\n%s Triggering camera.\n", self.LineIndicator);
+                    fprintf("\n%s > Triggering camera\n", self.LineIndicator);
                     self.CameraInterface_.startCapture(self.pipette, self.sweep);
                 catch
-                    fprintf('\n%s There was an error triggering the camera', self.LineIndicator)
+                    fprintf('\n%s > There was an error triggering the camera', self.LineIndicator)
                 end
             end
         end
@@ -169,14 +171,14 @@ classdef Opto < ws.UserClass
         function completingRun(self, wsModel)
             % stop camera
             if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
-                self.CameraInterface_.stopCapture;
+                self.CameraInterface_.stopCapture();
             end
         end
         
         function stoppingRun(self, wsModel)
             % stop camera
             if self.IsIInFrontend_ && wsModel.IsLoggingEnabled
-                self.CameraInterface_.stopCapture;
+                self.CameraInterface_.stopCapture();
             end
         end        
         
@@ -237,13 +239,13 @@ classdef Opto < ws.UserClass
         end
     end  % methods
     
-    methods (Access=protected)
-        function synchronizeTransientStateToPersistentStateAndRootModel_(self, rootModel)
-            if isa(rootModel, 'ws.WavesurferModel')
-                self.SampleRate_ = rootModel.AcquisitionSampleRate;
-            end
-        end
-    end
+%     methods (Access=protected)
+%         function synchronizeTransientStateToPersistentStateAndRootModel_(self, rootModel)
+%             if isa(rootModel, 'ws.WavesurferModel')
+%                 self.SampleRate_ = rootModel.AcquisitionSampleRate;
+%             end
+%         end
+%     end
     
     methods
         function result = get(self, propertyName)
