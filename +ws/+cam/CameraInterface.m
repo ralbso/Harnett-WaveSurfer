@@ -28,6 +28,7 @@ classdef CameraInterface < handle
         end
         
         function stopCapture(self)
+            fprintf('   Stopping capture\n')
             fwrite(self.cameraServer, [2 0 0])
         end
         
