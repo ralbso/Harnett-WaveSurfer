@@ -241,7 +241,7 @@ classdef CameraAcquisition < handle
                 fprintf('%s ERROR in readDataFcn: %s\n', ...
                     self.LineIndicator, ME.message);
                 fprintf('%s Stack: %s\n', ...
-                    self.LineIndicator, ME.stack(1).name);
+                    self.LineIndicator, ME.stack.name);
             end
         end % readDataFcn
         
