@@ -1,19 +1,22 @@
 classdef CounterTriggerTask < handle
+    % Counter-based trigger generation using MATLAB's native DAQ Toolbox.
+    % Generates a pulse train on a counter output, exported to a PFI terminal,
+    % for use as a trigger source.
         
     properties (Access = protected)
-        TaskName_ = 'Counter Trigger Task';        
-        DeviceName_ = ''   % NI device name to use
-        CounterID_ = 0   % Index of NI counter (CTR) to use (zero-based)
-        RepeatFrequency_ = 1  % Hz
+        TaskName_ = 'Counter Trigger Task'
+        DeviceName_ = ''
+        CounterID_ = 0
+        RepeatFrequency_ = 1   % Hz
         RepeatCount_ = 1
         PFIID_
         TriggerTerminalName_
-        DabsDaqTask_ = []        
+        DaqDevice_ = []        
     end
 
     methods
         function self = CounterTriggerTask(taskName, referenceClockSource, referenceClockRate, deviceName, counterID, ...
-                                           repeatFrequency, repeatCount, pfiID, triggerTerminalName)            
+                                           repeatFrequency, repeatCount, pfiID, triggerTerminalName) %#ok<INUSL>
             self.TaskName_ = taskName ;
             self.DeviceName_ = deviceName ;
             self.CounterID_ = counterID ;
@@ -21,67 +24,65 @@ classdef CounterTriggerTask < handle
             self.RepeatCount_ = repeatCount ;
             self.PFIID_ = pfiID ;
             self.TriggerTerminalName_ = triggerTerminalName ;
-                        
-            self.DabsDaqTask_ = ws.dabs.ni.daqmx.Task(self.TaskName_) ;
-            %deviceName
-            %counterID
-            %repeatFrequency
-            self.DabsDaqTask_.createCOPulseChanFreq(deviceName, counterID, '', repeatFrequency, 0.5, 0.0, 'DAQmx_Val_Low') ;
-            if isinf(repeatCount) ,
-                self.DabsDaqTask_.cfgImplicitTiming('DAQmx_Val_ContSamps');
-            else
-                self.DabsDaqTask_.cfgImplicitTiming('DAQmx_Val_FiniteSamps', repeatCount);
+            
+            % Create daq with counter output
+            self.DaqDevice_ = daq("ni") ;
+            counterName = sprintf("ctr%d", counterID) ;
+            addoutput(self.DaqDevice_, deviceName, counterName, "PulseGeneration") ;
+            
+            % Configure the pulse parameters
+            ch = self.DaqDevice_.Channels(1) ;
+            ch.Frequency = repeatFrequency ;
+            ch.DutyCycle = 0.5 ;
+            ch.InitialDelay = 0 ;
+            
+            % Configure trigger
+            if ~isempty(triggerTerminalName)
+                addtrigger(self.DaqDevice_, "Digital", "StartTrigger", ...
+                           triggerTerminalName, "External") ;
             end
-            set(self.DabsDaqTask_, 'refClkSrc', referenceClockSource) ;
-            set(self.DabsDaqTask_, 'refClkRate', referenceClockRate) ;
-            exportTerminalList = sprintf('/%s/pfi%d', deviceName, pfiID) ;
-            self.DabsDaqTask_.exportSignal('DAQmx_Val_CounterOutputEvent', exportTerminalList) ;
-            dabsTriggerEdge = ws.dabsEdgeTypeFromEdgeType('rising') ;
-            self.DabsDaqTask_.cfgDigEdgeStartTrig(triggerTerminalName, dabsTriggerEdge) ;
-        end  % function
+        end
         
         function delete(self)
             try
                 self.stop() ;
-            catch me %#ok<NASGU>  % would be really nice to make this only catch the specific exceptions we expect to could normally be thrown
-            end                
-            ws.deleteIfValidHandle(self.DabsDaqTask_) ;  % have to explicitly delete, b/c ws.dabs.ni.daqmx.System has refs to
-            self.DabsDaqTask_ = [] ;
+            catch
+            end
+            if ~isempty(self.DaqDevice_)
+                delete(self.DaqDevice_) ;
+            end
+            self.DaqDevice_ = [] ;
         end
         
         function start(self)
-            %fprintf('CounterTriggerTask::start(), CTR %d\n',self.CounterID_);
-            if ~isempty(self.DabsDaqTask_) ,
-                %self.DabsDaqTask_.doneEventCallbacks = {@self.taskDone_};
-                self.DabsDaqTask_.start() ;
+            if ~isempty(self.DaqDevice_)
+                if isinf(self.RepeatCount_)
+                    start(self.DaqDevice_, "continuous") ;
+                else
+                    start(self.DaqDevice_, "NumScans", self.RepeatCount_) ;
+                end
             end
         end
         
         function stop(self)
-            %fprintf('CounterTriggerTask::stop(), CTR %d\n', self.CounterID_);
-            if ~isempty(self.DabsDaqTask_) && isvalid(self.DabsDaqTask_) ,
-                self.DabsDaqTask_.stop() ;
-%                 if self.DabsDaqTask_.isTaskDoneQuiet() ,
-%                     self.DabsDaqTask_.stop();
-%                 else
-%                     self.DabsDaqTask_.abort();
-%                 end
+            if ~isempty(self.DaqDevice_) && isvalid(self.DaqDevice_)
+                if self.DaqDevice_.Running
+                    stop(self.DaqDevice_) ;
+                end
             end
         end
         
         function result = isDone(self)
-            if isempty(self.DabsDaqTask_) ,
-                % This means there is no assigned CTR device, so just
-                % return true
-                result = true ;  % things work out better if you use this convention
+            if isempty(self.DaqDevice_)
+                result = true ;
             else
-                result = self.DabsDaqTask_.isTaskDoneQuiet() ;
+                result = ~self.DaqDevice_.Running ;
             end
-        end  % function
+        end
         
-        function debug(self)  %#ok<MANU>
+        function debug(self) %#ok<MANU>
             keyboard
         end
-    end  % public methods
+    end
 
 end

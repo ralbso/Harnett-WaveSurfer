@@ -1,7 +1,8 @@
 #include <math.h>
+#include <stdint.h>
 #include "mex.h"
 
-typedef __int16  int16_t ;   // Map MS type to now-standard-C++ type
+// int16_t is now provided by <stdint.h> (standard C99+)
 
 /*
 inline 

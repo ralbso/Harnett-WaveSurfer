@@ -840,22 +840,25 @@ classdef Looper < handle
         end  % function
         
         function samplesAcquired_(self, rawAnalogData, rawDigitalData, timeSinceRunStartAtStartOfData)
-            % The central method for handling incoming data.  Called by WavesurferModel::samplesAcquired().
-            % Calls the dataAvailable() method on all the subsystems, which handle display, logging, etc.
+            % The central method for handling incoming data.
+            % NOTE: rawAnalogData is now DOUBLE (volts) from the native DAQ Toolbox,
+            % not int16 ADC counts as it was with the old +dabs interface.
             nScans=size(rawAnalogData,1);
-            %nChannels=size(data,2);
-            %assert(nChannels == numel(expectedChannelNames));
                         
             if (nScans>0)
                 % update the current time
                 dt = 1/self.AcquisitionSampleRate_ ;
                 self.t_ = self.t_ + nScans*dt ;  % Note that this is the time stamp of the sample just past the most-recent sample
 
-                % Scale the analog data
+                % Scale the analog data from volts to native units
+                % (With the native DAQ Toolbox, data arrives as doubles in volts,
+                % so we just need to divide by channelScales to get native units)
                 channelScales = self.AIChannelScales_(self.IsAIChannelActive_) ;
-                
-                scalingCoefficients = self.getAnalogScalingCoefficients_() ;
-                scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMex(rawAnalogData, channelScales, scalingCoefficients) ;
+                if isempty(rawAnalogData)
+                    scaledAnalogData = zeros(size(rawAnalogData)) ;
+                else
+                    scaledAnalogData = rawAnalogData ./ channelScales ;
+                end
                 
                 % Add data to the user cache
                 isSweepBased = isfinite(self.SweepDuration_) ;
@@ -1092,7 +1095,7 @@ classdef Looper < handle
                 [rawDigitalData,timeSinceRunStartAtStartOfData] = ...
                     self.TimedDigitalInputTask_.readData([], timeSinceSweepStart, fromRunStartTicId);                    
                 nScans = size(rawDigitalData,1) ;
-                rawAnalogData = zeros(nScans, 0, 'int16') ;
+                rawAnalogData = zeros(nScans, 0) ;  % double, matching the new AITask output format
                 % rawAnalogData  = ...
                 %     self.AnalogInputTask_.readData(nScans, timeSinceSweepStart, fromRunStartTicId);
             else

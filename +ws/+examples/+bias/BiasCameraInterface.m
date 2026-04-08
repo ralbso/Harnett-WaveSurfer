@@ -328,7 +328,7 @@ classdef BiasCameraInterface < handle
     methods (Access=protected)        
         function rsp = sendCmd(self, cmd)  %#ok<INUSL>
             rspString = urlread(cmd);
-            rsp = loadjson(rspString);
+            rsp = jsondecode(rspString);
         end
     end
     
@@ -337,7 +337,5 @@ classdef BiasCameraInterface < handle
 end
 
 function valJson = structToJson(val)
-    valJson = savejson('',val);
-    valJson = strrep(valJson,sprintf('\n'), '');
-    valJson = strrep(valJson,sprintf('\t'), '');
+    valJson = jsonencode(val);
 end

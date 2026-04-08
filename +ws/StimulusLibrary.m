@@ -2266,11 +2266,11 @@ classdef StimulusLibrary < ws.Model & ws.ValueComparable   % & ws.Mimic  % & ws.
                     self.SelectedItemClassName_ = '' ;
                 else
                     leafClassName = parts{end} ;
-                    if ws.contains(lower(leafClassName),'sequence') ,
+                    if contains(lower(leafClassName),'sequence') ,
                         self.SelectedItemClassName_ = 'ws.StimulusSequence' ;
-                    elseif ws.contains(lower(leafClassName),'map') ,
+                    elseif contains(lower(leafClassName),'map') ,
                         self.SelectedItemClassName_ = 'ws.StimulusMap' ;
-                    elseif ws.contains(lower(leafClassName),'stimulus') ,
+                    elseif contains(lower(leafClassName),'stimulus') ,
                         self.SelectedItemClassName_ = 'ws.Stimulus' ;
                     else
                         self.SelectedItemClassName_ = '' ;
@@ -2288,9 +2288,9 @@ classdef StimulusLibrary < ws.Model & ws.ValueComparable   % & ws.Mimic  % & ws.
                     self.SelectedOutputableClassName_ = '' ;
                 else
                     leafClassName = parts{end} ;
-                    if ws.contains(lower(leafClassName),'sequence') ,
+                    if contains(lower(leafClassName),'sequence') ,
                         self.SelectedOutputableClassName_ = 'ws.StimulusSequence' ;
-                    elseif ws.contains(lower(leafClassName),'map') ,
+                    elseif contains(lower(leafClassName),'map') ,
                         self.SelectedOutputableClassName_ = 'ws.StimulusMap' ;
                     else
                         self.SelectedOutputableClassName_ = '' ;

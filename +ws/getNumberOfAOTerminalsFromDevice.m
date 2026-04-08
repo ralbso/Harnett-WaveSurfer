@@ -1,27 +1,20 @@
 function result = getNumberOfAOTerminalsFromDevice(deviceName)
     % The number of AO channels available.
-    %deviceName = self.DeviceName ;
+    % Uses the modern Data Acquisition Toolbox instead of +dabs.
     if isempty(deviceName) ,
         result = 0 ;
-    else
-        try
-            device = ws.dabs.ni.daqmx.Device(deviceName) ;
-            commaSeparatedListOfChannelNames = device.get('AOPhysicalChans') ;  % this is a string
-        catch exception
-            if isequal(exception.identifier,'dabs:noDeviceByThatName') ,
-                result = 0 ;
-                return
-            else
-                rethrow(exception) ;
-            end
-        end
-        if isempty(strtrim(commaSeparatedListOfChannelNames)) ,
-            channelNames = cell(1,0) ;
+        return
+    end
+    try
+        devices = daqlist("ni") ;
+        matchRows = devices(strcmp(devices.DeviceID, deviceName) & ...
+                            strcmp(devices.SubsystemType, "AnalogOutput"), :) ;
+        if isempty(matchRows) ,
+            result = 0 ;
         else
-            channelNames = strtrim(strsplit(commaSeparatedListOfChannelNames,',')) ;
+            result = matchRows.NumChannels(1) ;
         end
-        % channelNames a cellstring, each element of the form '<device name>/ao<channel ID>'
-        result = length(channelNames) ;  % the number of channels available
+    catch me %#ok<NASGU>
+        result = 0 ;
     end
 end
-

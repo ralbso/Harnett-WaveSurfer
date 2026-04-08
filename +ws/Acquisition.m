@@ -100,11 +100,11 @@ classdef Acquisition < ws.Subsystem
             end
             if areSweepsContinuous ,
                 nScans = round(self.DataCacheDurationWhenContinuous_ * self.SampleRate_) ;
-                self.RawAnalogDataCache_ = zeros(nScans,nActiveAnalogChannels,'int16');
+                self.RawAnalogDataCache_ = zeros(nScans,nActiveAnalogChannels);
                 self.RawDigitalDataCache_ = zeros(nScans,min(1,nActiveDigitalChannels),dataType);
             elseif areSweepsFiniteDuration ,
                 expectedScanCount = ws.nScansFromScanRateAndDesiredDuration(self.SampleRate_, sweepDuration) ;
-                self.RawAnalogDataCache_ = zeros(expectedScanCount,nActiveAnalogChannels,'int16');
+                self.RawAnalogDataCache_ = zeros(expectedScanCount,nActiveAnalogChannels);
                 self.RawDigitalDataCache_ = zeros(expectedScanCount,min(1,nActiveDigitalChannels),dataType);
             else
                 % Shouldn't ever happen
@@ -728,7 +728,7 @@ classdef Acquisition < ws.Subsystem
 
         function data = getLatestRawAnalogData(self)
             % Get the data from the most-recent data available callback, as
-            % int16s.
+            % doubles (volts).
             data = self.LatestRawAnalogData_ ;
         end  % function
 
@@ -805,8 +805,8 @@ classdef Acquisition < ws.Subsystem
 %         end  % function
         
         function data = getRawAnalogDataFromCache(self)
-            % Get the data from the main-memory cache, as int16's.  This
-            % call unwraps the circular buffer for you.
+            % Get the data from the main-memory cache, as doubles (volts).
+            % This call unwraps the circular buffer for you.
             if self.IsAllDataInCacheValid_ ,
                 if self.IndexOfLastScanInCache_ == 0 ,
                     data = self.RawAnalogDataCache_ ;
@@ -815,7 +815,7 @@ classdef Acquisition < ws.Subsystem
                     nScansInCache = size(self.RawAnalogDataCache_,1) ;
                     indexOfLastScanInCache = self.IndexOfLastScanInCache_ ;
                     nEarlyScans = nScansInCache - indexOfLastScanInCache ;
-                    data=zeros(size(self.RawAnalogDataCache_),'int16');
+                    data=zeros(size(self.RawAnalogDataCache_));
                     data(1:nEarlyScans,:) = self.RawAnalogDataCache_(indexOfLastScanInCache+1:end,:);
                     data(nEarlyScans+1:end,:) = self.RawAnalogDataCache_(1:indexOfLastScanInCache,:);
                 end

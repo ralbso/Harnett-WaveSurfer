@@ -251,11 +251,7 @@ classdef WavesurferModel < ws.Model
     end
 
     properties (Access=protected, Transient=true)
-        IPCPublisher_
-        LooperIPCSubscriber_
-        RefillerIPCSubscriber_
-        LooperIPCRequester_
-        RefillerIPCRequester_
+        Runner_  % ws.InProcessRunner — replaces the old Looper/Refiller satellite processes
         HasUserSpecifiedProtocolFileName_ = false
         AbsoluteProtocolFileName_ = ''
         HasUserSpecifiedUserSettingsFileName_ = false
@@ -361,110 +357,10 @@ classdef WavesurferModel < ws.Model
             % ("Pretenders" are created when we load a protocol from disk,
             % for instance.)
             if isITheOneTrueWavesurferModel ,
-                % Determine which three free ports to use:
-                nPorts = 5 ;
-                portNumbers = ws.WavesurferModel.getFreeEphemeralPortNumbers(nPorts) ;                
-                frontendIPCPublisherPortNumber = portNumbers(1) ;
-                looperIPCPublisherPortNumber = portNumbers(2) ;
-                refillerIPCPublisherPortNumber = portNumbers(3) ;
-                looperIPCReplierPortNumber = portNumbers(4) ;
-                refillerIPCReplierPortNumber = portNumbers(5) ;                
-                
-                % Set up the object to broadcast messages to the satellite
-                % processes
-                self.IPCPublisher_ = ws.IPCPublisher(frontendIPCPublisherPortNumber) ;
-                self.IPCPublisher_.bind(); 
+                % Create the in-process runner (replaces the old Looper + Refiller satellite processes)
+                self.Runner_ = ws.InProcessRunner(self) ;
 
-                % Subscribe to the looper broadcaster
-                self.LooperIPCSubscriber_ = ws.IPCSubscriber() ;
-                self.LooperIPCSubscriber_.setDelegate(self) ;
-                self.LooperIPCSubscriber_.connect(looperIPCPublisherPortNumber) ;
-                
-                % Subscribe to the refiller broadcaster
-                self.RefillerIPCSubscriber_ = ws.IPCSubscriber() ;
-                self.RefillerIPCSubscriber_.setDelegate(self) ;
-                self.RefillerIPCSubscriber_.connect(refillerIPCPublisherPortNumber) ;
-
-                % Connect to the looper replier
-                self.LooperIPCRequester_ = ws.IPCRequester() ;
-                self.LooperIPCRequester_.connect(looperIPCReplierPortNumber) ;                
-                
-                % Connect to the refiller replier
-                self.RefillerIPCRequester_ = ws.IPCRequester() ;
-                self.RefillerIPCRequester_.connect(refillerIPCReplierPortNumber) ;                
-                
-                % Start the other Matlab processes, passing the relevant
-                % path information to make sure they can find all the .m
-                % files they need.
-                [pathToWavesurferRoot,pathToMatlabZmqLib] = ws.WavesurferModel.pathNamesThatNeedToBeOnSearchPath() ;
-                if doRunInDebugMode ,
-                    looperLaunchStringTemplate = ...
-                        ['start matlab -nosplash -minimize -r "addpath(''%s''); addpath(''%s''); looper=ws.Looper(%d, %d, %d); ' ...
-                         'looper.runMainLoop(); clear; quit()"'] ;
-                else
-                    looperLaunchStringTemplate = ...
-                        ['start matlab -nojvm -nosplash -minimize -r "addpath(''%s''); addpath(''%s''); ws.hideMatlabWindow(); looper=ws.Looper(%d, %d, %d); ' ...
-                         'looper.runMainLoop(); clear; quit()"'] ;
-                end
-                looperLaunchString = ...
-                    sprintf(looperLaunchStringTemplate , ...
-                            pathToWavesurferRoot , ...
-                            pathToMatlabZmqLib , ...
-                            looperIPCPublisherPortNumber, ...
-                            frontendIPCPublisherPortNumber, ...
-                            looperIPCReplierPortNumber) ;
-                system(looperLaunchString) ;
-                if doRunInDebugMode ,
-                    refillerLaunchStringTemplate = ...
-                        [ 'start matlab -nosplash -minimize -r "addpath(''%s''); addpath(''%s''); refiller=ws.Refiller(%d, %d, %d); ' ...
-                          'refiller.runMainLoop(); clear; quit()"' ] ;
-                else
-                    refillerLaunchStringTemplate = ...
-                        [ 'start matlab -nojvm -nosplash -minimize -r "addpath(''%s''); addpath(''%s'');  ws.hideMatlabWindow(); refiller=ws.Refiller(%d, %d, %d); ' ...
-                          'refiller.runMainLoop(); clear; quit()"' ] ;
-                end
-                refillerLaunchString = ...
-                    sprintf(refillerLaunchStringTemplate , ...
-                            pathToWavesurferRoot , ...
-                            pathToMatlabZmqLib , ...
-                            refillerIPCPublisherPortNumber, ...
-                            frontendIPCPublisherPortNumber, ...
-                            refillerIPCReplierPortNumber) ;
-                system(refillerLaunchString) ;
-                
-                % Start broadcasting pings until the satellite processes
-                % respond
-                nPingsMax=20 ;
-                isLooperAlive=false;
-                isRefillerAlive=false;
-                for iPing = 1:nPingsMax ,
-                    self.IPCPublisher_.send('areYallAliveQ') ;
-                    pause(1);
-                    [didGetMessage,messageName] = self.LooperIPCSubscriber_.processMessageIfAvailable() ;
-                    if didGetMessage && isequal(messageName,'looperIsAlive') ,
-                        isLooperAlive=true;
-                    end
-                    [didGetMessage,messageName] = self.RefillerIPCSubscriber_.processMessageIfAvailable() ;
-                    if didGetMessage && isequal(messageName,'refillerIsAlive') ,
-                        isRefillerAlive=true;
-                    end
-                    if isLooperAlive && isRefillerAlive ,
-                        break
-                    end
-                end
-
-                % Error if either satellite is not responding
-                if ~isLooperAlive ,
-                    error('ws:noContactWithLooper' , ...
-                          'Unable to establish contact with the looper process');
-                end
-                if ~isRefillerAlive ,
-                    error('ws:noContactWithRefiller' , ...
-                          'Unable to establish contact with the refiller process');
-                end
-
-                % Get the list of all device names, and cache it in our own
-                % state
+                % Get the list of all device names, and cache it in our own state
                 self.probeHardwareAndSetAllDeviceNames() ;                
             end  % if isITheOneTrueWavesurfer
             
@@ -522,15 +418,11 @@ classdef WavesurferModel < ws.Model
         function delete(self)            
             %fprintf('WavesurferModel::delete()\n');
             if self.IsITheOneTrueWavesurferModel_ ,
-                % Signal to others that we are going away
-                self.IPCPublisher_.send('frontendIsBeingDeleted') ;
-                
-                % Close the sockets
-                self.LooperIPCSubscriber_ = [] ;
-                self.RefillerIPCSubscriber_ = [] ;
-                self.LooperIPCRequester_ = [] ;
-                self.RefillerIPCRequester_ = [] ;
-                self.IPCPublisher_ = [] ;                                
+                % Clean up the in-process runner
+                if ~isempty(self.Runner_)
+                    delete(self.Runner_) ;
+                    self.Runner_ = [] ;
+                end
                 
                 % If yoked, tell SI that we're quitting
                 try
@@ -572,16 +464,11 @@ classdef WavesurferModel < ws.Model
                 % do nothing except re-sync the view to the model
                 self.broadcast('Update');
             else
-                % Actually stop the ongoing sweep
-                %self.abortSweepAndRun_('user');
-                %self.WasRunStoppedByUser_ = true ;
-                %fprintf('About to publish "frontendWantsToStopRun"\n') ;
-                self.IPCPublisher_.send('frontendWantsToStopRun');  
-                %fprintf('Just published "frontendWantsToStopRun"\n') ;
-                  % the looper gets this message and stops the run, then
-                  % publishes 'looperStoppedRun'.
-                  % similarly, the refiller gets this message, stops the
-                  % run, then publishes 'refillerStoppedRun'.
+                % Signal that the run should stop.
+                % The main sweep loop in run_() checks WasRunStopped_ and will exit.
+                self.WasRunStopped_ = true ;
+                self.WasRunStoppedInLooper_ = true ;
+                self.WasRunStoppedInRefiller_ = true ;
             end
         end  % function
     end
@@ -986,9 +873,7 @@ classdef WavesurferModel < ws.Model
             self.Display_.didSetDigitalInputTerminalID_() ;
             self.broadcast('UpdateChannels') ;
             if wasSet ,
-                %value = self.Acquisition_.DigitalTerminalIDs(iChannel) ;  % value is possibly normalized, terminalID is not
-                self.IPCPublisher_.send('singleDigitalInputTerminalIDWasSetInFrontend', ...
-                                        self.IsDOChannelTerminalOvercommitted ) ;
+                % (Satellite notification removed — no longer needed with in-process runner)
             end            
         end
         
@@ -1176,27 +1061,12 @@ classdef WavesurferModel < ws.Model
         end        
 
         function releaseTimedHardwareResourcesOfAllProcesses_(self)
-            % Release our own hardware resources, and also tell the
-            % satellites to do so.
+            % Release hardware resources. With in-process runner, just
+            % release our own resources and stop the runner.
             self.releaseTimedHardwareResources_() ;
-            %self.IPCPublisher_.send('satellitesReleaseTimedHardwareResources') ;
-            
-            % Wait for the looper to respond
-            timeout = 10 ;  % s
-            self.LooperIPCRequester_.send('releaseTimedHardwareResources') ;
-            err = self.LooperIPCRequester_.waitForResponse(timeout, 'releaseTimedHardwareResources') ;
-            if ~isempty(err) ,
-                % Something went wrong
-                throw(err);
+            if ~isempty(self.Runner_)
+                self.Runner_.stopRun() ;
             end
-            
-            % Wait for the refiller to respond
-            self.RefillerIPCRequester_.send('releaseTimedHardwareResources') ;
-            err = self.RefillerIPCRequester_.waitForResponse(timeout, 'releaseTimedHardwareResources') ;
-            if ~isempty(err) ,
-                % Something went wrong
-                throw(err);
-            end            
         end  % function        
     end
     
@@ -1311,124 +1181,47 @@ classdef WavesurferModel < ws.Model
              stimulationKeystoneTaskType, stimulationKeystoneTaskDeviceName] = ...
                self.determineKeystoneTasks() ;
             
-            % Tell the Looper & Refiller to prepare for the run
-            currentFrontendPath = path() ;
-            currentFrontendPwd = pwd() ;
-            looperProtocol = self.getLooperProtocol_() ;
-            refillerProtocol = self.getRefillerProtocol_() ;
-            %wavesurferModelSettings=self.encodeForPersistence();
-            %fprintf('About to send startingRun\n');
-            self.LooperIPCRequester_.send('startingRun', ...
-                                          currentFrontendPath, ...
-                                          currentFrontendPwd, ...
-                                          looperProtocol, ...
-                                          acquisitionKeystoneTaskType, ...
-                                          acquisitionKeystoneTaskDeviceName,  ...
-                                          self.IsDOChannelTerminalOvercommitted) ;
-            self.RefillerIPCRequester_.send('startingRun', ...
-                                            currentFrontendPath, ...
-                                            currentFrontendPwd, ...
-                                            refillerProtocol, ...
-                                            stimulationKeystoneTaskType, ...
-                                            stimulationKeystoneTaskDeviceName, ...
-                                            self.IsAOChannelTerminalOvercommitted, ...
-                                            self.IsDOChannelTerminalOvercommitted ) ;
-            
-            % Isn't the code below a race condition?  What if the refiller
-            % responds first?  No, it's not a race, because one is waiting
-            % on the LooperIPCRequester_, the other on the
-            % RefillerIPCRequester_.
-            
-            % Wait for the looper to respond that it is ready
-            timeout = 10 ;  % s
-            [err,looperResponse] = self.LooperIPCRequester_.waitForResponse(timeout, 'startingRun') ;
-            if isempty(err) ,
-                if isa(looperResponse,'MException') ,
-                    compositeLooperError = looperResponse ;
-                    analogScalingCoefficients = [] ;
-                    clockAtRunStartTic = [] ;
+            % Start the in-process runner (replaces old Looper/Refiller IPC handshake)
+            try
+                isAIChannelActive = self.IsAIChannelActive ;
+                isDIChannelActive = self.Acquisition_.getIsDigitalChannelActive_() ;
+                runConfig = struct() ;
+                runConfig.PrimaryDeviceName = self.PrimaryDeviceName ;
+                runConfig.IsPrimaryDeviceAPXIDevice = self.IsPrimaryDeviceAPXIDevice ;
+                runConfig.AcquisitionSampleRate = self.AcquisitionSampleRate ;
+                runConfig.SweepDuration = self.SweepDuration ;
+                runConfig.AcquisitionKeystoneTaskType = acquisitionKeystoneTaskType ;
+                runConfig.AcquisitionKeystoneTaskDeviceName = acquisitionKeystoneTaskDeviceName ;
+                runConfig.StimulationKeystoneTaskType = stimulationKeystoneTaskType ;
+                runConfig.StimulationKeystoneTaskDeviceName = stimulationKeystoneTaskDeviceName ;
+                runConfig.ActiveAIDeviceNames = self.AIChannelDeviceNames(isAIChannelActive) ;
+                runConfig.ActiveAITerminalIDs = self.AIChannelTerminalIDs(isAIChannelActive) ;
+                runConfig.ActiveDITerminalIDs = self.DIChannelTerminalIDs(isDIChannelActive) ;
+                runConfig.ActiveAODeviceNames = self.AOChannelDeviceNames ;
+                runConfig.ActiveAOTerminalIDs = self.AOChannelTerminalIDs ;
+                runConfig.ActiveDOTerminalIDs = self.DOChannelTerminalIDs ;
+                runConfig.AIChannelScales = self.AIChannelScales(isAIChannelActive) ;
+                triggerIndex = self.Triggering_.AcquisitionTriggerSchemeIndex ;
+                if triggerIndex == 1
+                    runConfig.TriggerDeviceName = self.PrimaryDeviceName ;
+                    runConfig.TriggerPFIID = 0 ;
+                    runConfig.TriggerEdge = 'rising' ;
                 else
-                    compositeLooperError = [] ;
-                    analogScalingCoefficients = looperResponse.ScalingCoefficients ;
-                    clockAtRunStartTic = looperResponse.ClockAtRunStartTic ;
+                    trigger = self.Triggering_.AcquisitionTriggerScheme ;
+                    runConfig.TriggerDeviceName = trigger.DeviceName ;
+                    runConfig.TriggerPFIID = trigger.PFIID ;
+                    runConfig.TriggerEdge = trigger.Edge ;
                 end
-            else
-                % If there was an error in the
-                % message-sending-and-receiving process, then we don't
-                % really care if the looper also had a problem.  We have
-                % bigger fish to fry, in a sense.
-                compositeLooperError = err ;
-                analogScalingCoefficients = [] ;
-                clockAtRunStartTic = [] ;
-            end            
-            if isempty(compositeLooperError) ,
-                summaryLooperError = [] ;
-            else
-                % Something went wrong
-                %self.abortOngoingRun_();
-                %self.changeReadiness_(+1);
-                summaryLooperError = MException('wavesurfer:looperDidntGetReady', ...
-                                                'The looper encountered a problem while getting ready for the run');
-                summaryLooperError = summaryLooperError.addCause(compositeLooperError) ;
-                %throw(summaryLooperError) ;  % can't throw until we
-                %consume the message from the refiller.  See below.
+                [analogScalingCoefficients, clockAtRunStartTic] = self.Runner_.startRun(runConfig) ;
+            catch me
+                self.abortOngoingRun_() ;
+                self.changeReadiness_(+1) ;
+                me.rethrow() ;
             end
             
-            % Even if the looper had a problem, we still need to get the
-            % message from the refiller, if any, because we're using
-            % req-rep for these messages.
-            
-            % Wait for the refiller to respond that it is ready
-            [err, refillerError] = self.RefillerIPCRequester_.waitForResponse(timeout, 'startingRun') ;
-            if isempty(err) ,
-                compositeRefillerError = refillerError ;
-            else
-                % If there was an error in the
-                % message-sending-and-receiving process, then we don't
-                % really care if the refiller also had a problem.  We have
-                % bigger fish to fry, in a sense.
-                compositeRefillerError = err ;
-            end
-            if isempty(compositeRefillerError) ,
-                summaryRefillerError = [] ;
-            else
-                % Something went wrong
-                %self.abortOngoingRun_();
-                %self.changeReadiness_(+1);
-                summaryRefillerError = MException('wavesurfer:refillerDidntGetReady', ...
-                                                  'The refiller encountered a problem while getting ready for the run');
-                summaryRefillerError = summaryRefillerError.addCause(compositeRefillerError) ;
-                %throw(me) ;
-            end
-            
-            % OK, now throw up if needed
-            if isempty(summaryLooperError) ,
-                if isempty(summaryRefillerError) ,
-                    % nothing to do
-                else
-                    self.abortOngoingRun_();
-                    self.changeReadiness_(+1);
-                    throw(summaryRefillerError) ;                    
-                end
-            else
-                if isempty(summaryRefillerError) ,
-                    self.abortOngoingRun_();
-                    self.changeReadiness_(+1);
-                    throw(summaryLooperError) ;                                        
-                else
-                    % Problems abound!  Throw the looper one, for no good
-                    % reason...
-                    self.abortOngoingRun_();
-                    self.changeReadiness_(+1);
-                    throw(summaryLooperError) ;                                                            
-                end                
-            end
-            
-            % Stash the analog scaling coefficients (have to do this now,
-            % instead of in Acquisiton.startingRun(), b/c we get them from
-            % the looper
+            % Stash the analog scaling coefficients and run start time
             self.Acquisition_.cacheAnalogScalingCoefficients_(analogScalingCoefficients) ;
-            self.ClockAtRunStart_ = clockAtRunStartTic ;  % store the value returned from the looper
+            self.ClockAtRunStart_ = clockAtRunStartTic ;
             
             % RM 04/06/2022 Record timestamp in POSIX instead of datetime
             % Note: There seems to be a constant delay of ~120-180ms 
@@ -1509,33 +1302,17 @@ classdef WavesurferModel < ws.Model
                             exception = me ;
                         end
                     else
-                        %fprintf('At top of within-sweep loop...\n') ;
-                        self.LooperIPCSubscriber_.processMessagesIfAvailable() ;  % process all available messages, to make sure we keep up
-                        self.RefillerIPCSubscriber_.processMessagesIfAvailable() ;  % process all available messages, to make sure we keep up
-                        % do a drawnow() if it's been too long...
-                        timeSinceLastDrawNow = toc(self.DrawnowTicId_) - self.TimeOfLastDrawnow_ ;
-                        if timeSinceLastDrawNow > 0.1 ,  % 0.1 s, hence 10 Hz
-                            drawnow() ;
-                            self.TimeOfLastDrawnow_ = toc(self.DrawnowTicId_) ;
-                        end                    
+                        % Within a sweep — let timer callbacks fire and process UI events
+                        drawnow() ;
                     end
                 else
                     % We are not currently performing a sweep, so check if we need to start one
                     if self.AreAllSweepsCompleted_ ,
-                        % All sweeps are were performed, but the refiller must not be done yet if we got here
-                        % Keep checking messages so we know when the
-                        % refiller is done.  Also keep listening for looper
-                        % messages, although I'm not sure we need to...
-                        %fprintf('About to check for messages after completing all sweeps\n');
-                        self.LooperIPCSubscriber_.processMessagesIfAvailable() ;  % process all available messages, to make sure we keep up
-                        self.RefillerIPCSubscriber_.processMessagesIfAvailable() ;  % process all available messages, to make sure we keep up
-                        %fprintf('Check for messages after completing all sweeps\n');
-                        % do a drawnow() if it's been too long...
-                        timeSinceLastDrawNow = toc(self.DrawnowTicId_) - self.TimeOfLastDrawnow_ ;
-                        if timeSinceLastDrawNow > 0.1 ,  % 0.1 s, hence 10 Hz
-                            drawnow() ;
-                            self.TimeOfLastDrawnow_ = toc(self.DrawnowTicId_) ;
+                        % All sweeps performed — check if output is done too
+                        if ~isempty(self.Runner_) && self.Runner_.isOutputDone()
+                            self.DidRefillerCompleteEpisodes_ = true ;
                         end
+                        drawnow() ;
                     else                        
                         try
                             self.openSweep_() ;
@@ -1607,28 +1384,36 @@ classdef WavesurferModel < ws.Model
                 end
             end
 
-            % Notify the refiller that we're starting a sweep, wait for the refiller to respond
+            % Prepare stimulus data and start the sweep via the in-process runner
             if self.Stimulation_.IsEnabled && (self.StimulationTriggerIndex==self.AcquisitionTriggerIndex) ,
-                self.RefillerIPCRequester_.send('startingSweep', self.NSweepsCompletedInThisRun_+1) ;
-                timeout = 11 ;  % s
-                err = self.RefillerIPCRequester_.waitForResponse(timeout, 'startingSweep') ;
-                if ~isempty(err) ,
-                    % Something went wrong
-                    self.abortOngoingRun_();
-                    self.changeReadiness_(+1);
-                    throw(err);
+                % Calculate stimulus waveforms
+                try
+                    stimulusLibrary = self.Stimulation_.StimulusLibrary_ ;
+                    sweepIndexWithinSet = self.NSweepsCompletedInThisRun_ + 1 ;
+                    stimulusMapIndex = stimulusLibrary.getCurrentStimulusMapIndex(sweepIndexWithinSet, self.DoRepeatStimulusSequence) ;
+                    if ~isempty(stimulusMapIndex) ,
+                        channelNames = self.Stimulation_.ChannelNames ;
+                        isChannelAnalog = self.Stimulation_.IsChannelAnalog ;
+                        [analogStimData, ~] = stimulusLibrary.calculateSignalsForMap(...
+                            stimulusMapIndex, self.StimulationSampleRate, channelNames, isChannelAnalog, sweepIndexWithinSet) ;
+                    else
+                        analogStimData = [] ;
+                    end
+                    self.Runner_.loadStimulusData(analogStimData, []) ;
+                catch me
+                    self.abortOngoingRun_() ;
+                    self.changeReadiness_(+1) ;
+                    throw(me) ;
                 end
             end
             
-            % Notify the looper that we're starting a sweep, wait for the looper to respond
-            self.LooperIPCRequester_.send('startingSweep', self.NSweepsCompletedInThisRun_+1) ;
-            timeout = 12 ;  % s
-            err = self.LooperIPCRequester_.waitForResponse(timeout, 'startingSweep') ;
-            if ~isempty(err) 
-                % Something went wrong
-                self.abortOngoingRun_();
-                self.changeReadiness_(+1);
-                throw(err);
+            % Start the sweep (starts all input and output tasks)
+            try
+                self.Runner_.startSweep(self.NSweepsCompletedInThisRun_ + 1) ;
+            catch me
+                self.abortOngoingRun_() ;
+                self.changeReadiness_(+1) ;
+                throw(me) ;
             end
 
             % Set the sweep timer
@@ -1838,9 +1623,13 @@ classdef WavesurferModel < ws.Model
         end
         
         function stopTheOngoingSweep_(self)
-            %fprintf('WavesurferModel::stopTheOngoingSweep_()\n') ;
-
-            % Stop the ongoing sweep following user request            
+            % Stop the ongoing sweep following user request
+            
+            % Stop the runner's sweep (stops polling timer and DAQ tasks)
+            if ~isempty(self.Runner_)
+                self.Runner_.stopSweep() ;
+            end
+            
             self.dataAvailable_() ;  % Process any remaining data in the samples buffer
 
             % Notify all the subsystems that the sweep was stopped
@@ -1861,7 +1650,11 @@ classdef WavesurferModel < ws.Model
 
         function abortTheOngoingSweep_(self)
             % Clean up after a sweep shits the bed.
-            %fprintf('WavesurferModel::abortTheOngoingSweep_()\n') ;
+            
+            % Stop the runner's sweep (stops polling timer and DAQ tasks)
+            if ~isempty(self.Runner_)
+                self.Runner_.stopSweep() ;
+            end
             
             % Notify all the subsystems that the sweep aborted
             for i = numel(self.Subsystems_):-1:1 ,
@@ -1889,8 +1682,10 @@ classdef WavesurferModel < ws.Model
         function wrapUpRunInWhichAllSweepsCompleted_(self)
             % Clean up after all sweeps complete successfully.
             
-            % Notify other processes
-            self.IPCPublisher_.send('completingRun') ;
+            % Stop the in-process runner
+            if ~isempty(self.Runner_)
+                self.Runner_.stopRun() ;
+            end
 
             % Notify subsystems
             for idx = 1: numel(self.Subsystems_) ,
@@ -1923,16 +1718,10 @@ classdef WavesurferModel < ws.Model
             % Called when the user stops the run in the middle, typically
             % by pressing the stop button.            
             
-            %fprintf('WavesurferModel::stopTheOngoingRun_()\n') ;
-            
-            % Notify other processes --- or not, we don't currently need
-            % this
-            %self.IPCPublisher_.send('didStopRun') ;
-
-            % No need to notify other processes, already did this by
-            % sending 'frontendWantsToStopRun' message
-            % % Notify other processes
-            % self.IPCPublisher_.send('stoppingRun') ;
+            % Stop the in-process runner
+            if ~isempty(self.Runner_)
+                self.Runner_.stopRun() ;
+            end
 
             % Notify subsystems, in reverse of starting order
 %             for idx = numel(self.Subsystems_):-1:1 ,
@@ -1975,8 +1764,10 @@ classdef WavesurferModel < ws.Model
             
             %fprintf('WavesurferModel::abortOngoingRun_()\n') ;
 
-            % Notify other processes
-            self.IPCPublisher_.send('abortingRun') ;
+            % Stop the in-process runner
+            if ~isempty(self.Runner_)
+                self.Runner_.stopRun() ;
+            end
 
             % Notify subsystems, in reverse of starting order
 %             for idx = numel(self.Subsystems_):-1:1 ,
@@ -2092,19 +1883,15 @@ classdef WavesurferModel < ws.Model
                 dt=1/self.AcquisitionSampleRate;
                 self.t_=self.t_+nScans*dt;  % Note that this is the time stamp of the sample just past the most-recent sample
 
-                % Scale the analog data
+                % Scale the analog data from volts to native units.
+                % With the native DAQ Toolbox, rawAnalogData arrives as doubles in volts,
+                % so we just divide by channelScales (V per native unit) to get native units.
                 channelScales=self.AIChannelScales(self.IsAIChannelActive);
-                scalingCoefficients = self.Acquisition_.AnalogScalingCoefficients ;
-                scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMex(rawAnalogData, channelScales, scalingCoefficients) ;                
-                %scaledAnalogData = ws.scaledDoubleAnalogDataFromRaw(rawAnalogData, channelScales) ;                
-%                 inverseChannelScales=1./channelScales;  % if some channel scales are zero, this will lead to nans and/or infs
-%                 if isempty(rawAnalogData) ,
-%                     scaledAnalogData=zeros(size(rawAnalogData));
-%                 else
-%                     data = double(rawAnalogData);
-%                     combinedScaleFactors = 3.0517578125e-4 * inverseChannelScales;  % counts-> volts at AI, 3.0517578125e-4 == 10/2^(16-1)
-%                     scaledAnalogData=bsxfun(@times,data,combinedScaleFactors); 
-%                 end
+                if isempty(rawAnalogData)
+                    scaledAnalogData = zeros(size(rawAnalogData)) ;
+                else
+                    scaledAnalogData = rawAnalogData ./ channelScales ;
+                end
                 
                 % Store the data in the user cache
                 self.Acquisition_.addDataToUserCache(rawAnalogData, rawDigitalData, self.AreSweepsFiniteDuration_) ;
@@ -2583,10 +2370,7 @@ classdef WavesurferModel < ws.Model
             self.syncIsDIOChannelTerminalOvercommitted_() ;
             self.broadcast('UpdateChannels') ;
             if wasSet ,
-                %self.Parent.singleDigitalOutputTerminalIDWasSetInStimulationSubsystem(i) ;
-                value = self.Stimulation_.DigitalTerminalIDs(iChannel) ;  % value is possibly normalized, terminalID is not
-                self.IPCPublisher_.send('singleDigitalOutputTerminalIDWasSetInFrontend', ...
-                                        iChannel, value, self.IsDOChannelTerminalOvercommitted ) ;
+                % (Satellite notification removed)
             end
         end
         
@@ -2598,16 +2382,12 @@ classdef WavesurferModel < ws.Model
 %                                     i, value, self.IsDOChannelTerminalOvercommitted ) ;
 %         end
 
-        function digitalOutputStateIfUntimedWasSetInStimulationSubsystem(self)
-            value = self.DOChannelStateIfUntimed ;
-            self.IPCPublisher_.send('digitalOutputStateIfUntimedWasSetInFrontend', value) ;
+        function digitalOutputStateIfUntimedWasSetInStimulationSubsystem(self) %#ok<MANU>
+            % (Satellite notification removed — no longer needed)
         end
         
-        function isDigitalChannelTimedWasSetInStimulationSubsystem(self)
-            value = self.IsDOChannelTimed ;
-            % Notify the refiller first, so that it can release all the DO
-            % channels
-            self.IPCPublisher_.send('isDigitalOutputTimedWasSetInFrontend',value) ;
+        function isDigitalChannelTimedWasSetInStimulationSubsystem(self) %#ok<MANU>
+            % (Satellite notification removed — no longer needed)
         end
         
         function didAddAnalogInputChannel(self)
@@ -2661,8 +2441,6 @@ classdef WavesurferModel < ws.Model
                 self.Ephys_.didChangeNumberOfInputChannels() ;
                 self.broadcast('UpdateChannels') ;  % causes channels figure to update
                 self.broadcast('DidChangeNumberOfInputChannels');  % causes scope controllers to be synched with scope models
-                self.IPCPublisher_.send('didAddDigitalInputChannelInFrontend', ...
-                                        self.IsDOChannelTerminalOvercommitted) ;
             end
         end
         
@@ -2689,12 +2467,6 @@ classdef WavesurferModel < ws.Model
                 isTimedForEachDOChannel = self.IsDOChannelTimed ;
                 onDemandOutputForEachDOChannel = self.DOChannelStateIfUntimed ;
                 isTerminalOvercommittedForEachDOChannel = self.IsDOChannelTerminalOvercommitted ;
-                self.IPCPublisher_.send('didAddDigitalOutputChannelInFrontend', ...
-                                        channelNameForEachDOChannel, ...
-                                        terminalIDForEachDOChannel, ...
-                                        isTimedForEachDOChannel, ...
-                                        onDemandOutputForEachDOChannel, ...
-                                        isTerminalOvercommittedForEachDOChannel) ;
             end
         end        
         
@@ -2714,8 +2486,6 @@ classdef WavesurferModel < ws.Model
             self.Ephys_.didChangeNumberOfInputChannels() ;
             self.broadcast('UpdateChannels') ;  % causes channels figure to update
             self.broadcast('DidChangeNumberOfInputChannels') ;  % causes scope controllers to be synched with scope models
-            self.IPCPublisher_.send('didDeleteDigitalInputChannelsInFrontend', ...
-                                    self.IsDOChannelTerminalOvercommitted) ;
         end
         
         function deleteMarkedAOChannels(self)
@@ -2755,12 +2525,6 @@ classdef WavesurferModel < ws.Model
             isTimedForEachDOChannel = self.IsDOChannelTimed ;
             onDemandOutputForEachDOChannel = self.DOChannelStateIfUntimed ;
             isTerminalOvercommittedForEachDOChannel = self.IsDOChannelTerminalOvercommitted ;
-            self.IPCPublisher_.send('didRemoveDigitalOutputChannelsInFrontend', ...
-                                    channelNameForEachDOChannel, ...
-                                    terminalIDForEachDOChannel, ...
-                                    isTimedForEachDOChannel, ...
-                                    onDemandOutputForEachDOChannel, ...
-                                    isTerminalOvercommittedForEachDOChannel) ;
         end        
     end  % public methods block
     
@@ -3006,14 +2770,7 @@ classdef WavesurferModel < ws.Model
             % on-demand
             %keyboard
             if self.IsITheOneTrueWavesurferModel_ ,
-                isTerminalOvercommittedForEachDOChannel = self.IsDOChannelTerminalOvercommitted ;  % this is transient, so isn't in the wavesurferModelSettings
-                self.IPCPublisher_.send('didSetPrimaryDeviceInFrontend', ...
-                                        primaryDeviceName, ...
-                                        isPrimaryDeviceAPXIDevice, ...
-                                        isTerminalOvercommittedForEachDOChannel) ;
-                %wavesurferModelSettings = self.encodeForPersistence() ;
-                looperProtocol = self.getLooperProtocol_() ;
-                self.IPCPublisher_.send('frontendJustLoadedProtocol', looperProtocol, isTerminalOvercommittedForEachDOChannel) ;
+                % (Satellite notifications removed — no longer needed with in-process runner)
             end
         end  % function
     end  % protected methods block
@@ -3086,52 +2843,16 @@ classdef WavesurferModel < ws.Model
     
     methods (Static)
         function [pathToRepoRoot,pathToMatlabZmqLib] = pathNamesThatNeedToBeOnSearchPath()
-            % Allow user to invoke Wavesurfer from the Matlab command line, for
-            % this Matlab session only.  Modifies the user's Matlab path, but does
-            % not safe the modified path.
-
+            % DEPRECATED: No longer needed — satellite processes eliminated.
             pathToWavesurferModel = mfilename('fullpath') ;
-            pathToWsModulerFolder = fileparts(pathToWavesurferModel) ;  % should be +ws folder
-            pathToRepoRoot = fileparts(pathToWsModulerFolder) ;  % should be repo root
-            pathToMatlabZmqLib = fullfile(pathToRepoRoot,'matlab-zmq','lib') ;
-            
-            %result = { pathToRepoRoot , pathToMatlabZmqLib } ;
+            pathToWsModulerFolder = fileparts(pathToWavesurferModel) ;
+            pathToRepoRoot = fileparts(pathToWsModulerFolder) ;
+            pathToMatlabZmqLib = '' ;
         end
         
-        function portNumbers = getFreeEphemeralPortNumbers(nPorts)
-            % Determine which three free ports to use:
-            % First bind to three free ports to get their addresses
-            freePorts = struct('context',{},'socket',{},'endpoint',{},'portNumber',{});
-            for i=1:nPorts ,
-                %freePorts(i).context = zmq.core.ctx_new();
-                freePorts(i).context = zmq.Context();
-                %freePorts(i).socket  = zmq.core.socket(freePorts(i).context, 'ZMQ_PUSH');
-                freePorts(i).socket  = freePorts(i).context.socket('ZMQ_PUSH');
-                address = 'tcp://127.0.0.1:*';
-                %zmq.core.bind(freePorts(i).socket, address);
-                freePorts(i).socket.bind(address);
-                %freePorts(i).endpoint = zmq.core.getsockopt(freePorts(i).socket, 'ZMQ_LAST_ENDPOINT');
-                %freePorts(i).endpoint = freePorts(i).socket.getsockopt('ZMQ_LAST_ENDPOINT');
-                %freePorts(i).endpoint = freePorts(i).socket.get('ZMQ_LAST_ENDPOINT');
-                freePorts(i).endpoint = freePorts(i).socket.bindings{end} ;
-                splitString = strsplit(freePorts(i).endpoint,'tcp://127.0.0.1:');
-                freePorts(i).portNumber = str2double(splitString{2});
-            end
-
-            % Unbind the ports to free them up for the actual
-            % processes. Doing it in this way (rather than
-            % binding/unbinding each port sequentially) will minimize amount of
-            % time between a port being unbound and bound by a process.
-            for i=1:nPorts ,
-                %zmq.core.disconnect(freePorts(i).socket, freePorts(i).endpoint);
-                %zmq.core.close(freePorts(i).socket);
-                %zmq.core.ctx_shutdown(freePorts(i).context);
-                %zmq.core.ctx_term(freePorts(i).context);
-                freePorts(i).socket = [] ;
-                freePorts(i).context = [] ;
-            end
-
-            portNumbers = [ freePorts(:).portNumber ] ;            
+        function portNumbers = getFreeEphemeralPortNumbers(nPorts) %#ok<INUSD>
+            % DEPRECATED: No longer needed — satellite processes eliminated.
+            portNumbers = [] ;
         end
     end  % static methods block
     
@@ -3426,83 +3147,17 @@ classdef WavesurferModel < ws.Model
     end  % public methods block
     
     methods (Access=protected)
-        function looperProtocol = getLooperProtocol_(self)
+        function looperProtocol = getLooperProtocol_(self) %#ok<MANU>
+            % DEPRECATED: No longer needed — satellite processes eliminated.
+            % The InProcessRunner receives its config directly via startRun().
             looperProtocol = struct() ;
-
-            looperProtocol.PrimaryDeviceName = self.PrimaryDeviceName ;
-            looperProtocol.IsPrimaryDeviceAPXIDevice = self.IsPrimaryDeviceAPXIDevice ;
-            
-%             looperProtocol.ReferenceClockSource = self.ReferenceClockSource ;
-%             looperProtocol.ReferenceClockRate = self.ReferenceClockRate ;
-            
-            looperProtocol.NSweepsPerRun = self.NSweepsPerRun ;
-            looperProtocol.SweepDuration = self.SweepDuration ;
-            looperProtocol.AcquisitionSampleRate = self.AcquisitionSampleRate ;
-
-            looperProtocol.AIChannelNames = self.AIChannelNames ;
-            looperProtocol.AIChannelScales = self.AIChannelScales ;
-            looperProtocol.IsAIChannelActive = self.IsAIChannelActive ;
-            looperProtocol.AIChannelDeviceNames = self.AIChannelDeviceNames ;
-            looperProtocol.AIChannelTerminalIDs = self.AIChannelTerminalIDs ;
-            
-            looperProtocol.DIChannelNames = self.DIChannelNames ;
-            looperProtocol.IsDIChannelActive = self.IsDIChannelActive ;
-            %looperProtocol.DIChannelDeviceNames = self.DIChannelDeviceNames ;
-            looperProtocol.DIChannelTerminalIDs = self.DIChannelTerminalIDs ;
-            
-            looperProtocol.DOChannelNames = self.DOChannelNames ;
-            %looperProtocol.DOChannelDeviceNames = self.DOChannelDeviceNames ;
-            looperProtocol.DOChannelTerminalIDs = self.DOChannelTerminalIDs ;
-            looperProtocol.IsDOChannelTimed = self.IsDOChannelTimed ;
-            looperProtocol.DigitalOutputStateIfUntimed = self.DOChannelStateIfUntimed ;
-            
-            looperProtocol.DataCacheDurationWhenContinuous = self.Acquisition_.DataCacheDurationWhenContinuous ;
-            
-            looperProtocol.AcquisitionTriggerDeviceName = self.Triggering_.getAcquisitionTriggerProperty('DeviceName') ;
-            looperProtocol.AcquisitionTriggerPFIID = self.Triggering_.getAcquisitionTriggerProperty('PFIID') ;
-            looperProtocol.AcquisitionTriggerEdge = self.Triggering_.getAcquisitionTriggerProperty('Edge') ;
-            
-            looperProtocol.IsUserCodeManagerEnabled = self.UserCodeManager_.IsEnabled ;                        
-            looperProtocol.TheUserObject = self.TheUserObject ;
-        end  % method
+        end
         
-        function refillerProtocol = getRefillerProtocol_(self)
+        function refillerProtocol = getRefillerProtocol_(self) %#ok<MANU>
+            % DEPRECATED: No longer needed — satellite processes eliminated.
+            % The InProcessRunner receives its config directly via startRun().
             refillerProtocol = struct() ;
-            
-            refillerProtocol.PrimaryDeviceName = self.PrimaryDeviceName ;
-            refillerProtocol.IsPrimaryDeviceAPXIDevice = self.IsPrimaryDeviceAPXIDevice ;
-            
-%             %refillerProtocol.DeviceName = self.DeviceName ;
-%             refillerProtocol.ReferenceClockSource = self.ReferenceClockSource ;
-%             refillerProtocol.ReferenceClockRate = self.ReferenceClockRate ;
-
-            refillerProtocol.NSweepsPerRun  = self.NSweepsPerRun ;
-            refillerProtocol.SweepDuration = self.SweepDuration ;
-            refillerProtocol.StimulationSampleRate = self.StimulationSampleRate ;
-
-            refillerProtocol.AOChannelNames = self.Stimulation_.AnalogChannelNames ;
-            refillerProtocol.AOChannelScales = self.AOChannelScales ;
-            refillerProtocol.AOChannelDeviceNames = self.AOChannelDeviceNames ;
-            refillerProtocol.AOChannelTerminalIDs = self.AOChannelTerminalIDs ;
-            
-            refillerProtocol.DOChannelNames = self.Stimulation_.DigitalChannelNames ;
-            refillerProtocol.IsDOChannelTimed = self.IsDOChannelTimed ;
-            %refillerProtocol.DOChannelDeviceNames = self.DOChannelDeviceNames ;
-            refillerProtocol.DOChannelTerminalIDs = self.DOChannelTerminalIDs ;
-            
-            refillerProtocol.IsStimulationEnabled = self.Stimulation_.IsEnabled ;                                    
-            refillerProtocol.StimulationTrigger = self.Triggering_.getStimulationTriggerCopy() ;            
-            refillerProtocol.StimulusLibrary = self.Stimulation_.getStimulusLibraryCopy() ;  
-              % .copy() sets the stim lib Parent pointer to [], if it isn't already.  We 
-              % don't want to preserve the stim lib parent pointer, b/c
-              % that leads back to the entire WSM.
-            refillerProtocol.DoRepeatSequence = self.DoRepeatStimulusSequence ;
-            refillerProtocol.IsStimulationTriggerIdenticalToAcquistionTrigger_ = ...
-                (self.StimulationTriggerIndex==self.AcquisitionTriggerIndex) ;
-            
-            refillerProtocol.IsUserCodeManagerEnabled = self.UserCodeManager_.IsEnabled ;                        
-            refillerProtocol.TheUserObject = self.TheUserObject ;
-        end  % method        
+        end        
     end  % protected methods block
     
     methods
@@ -3580,10 +3235,7 @@ classdef WavesurferModel < ws.Model
                     %nAITerminals = self.NAITerminalsPerDevice_(iMatch) ;
                     %nAOTerminals = self.NAOTerminalsPerDevice_(iMatch) ;                    
                     if self.IsITheOneTrueWavesurferModel_ ,
-                        self.IPCPublisher_.send('didSetPrimaryDeviceInFrontend', ...
-                                                primaryDeviceName, ...
-                                                isPrimaryDeviceAPXIDevice, ...
-                                                self.IsDOChannelTerminalOvercommitted) ;
+                        % (Satellite notification removed)
                     end                        
                 else
                     self.broadcast('Update') ;
@@ -4588,29 +4240,38 @@ classdef WavesurferModel < ws.Model
         
         function scaledAnalogData = getLatestAIData(self)
             % Get the data from the most-recent data available callback, as
-            % doubles.
+            % doubles in native units.
             rawAnalogData = self.Acquisition_.getLatestRawAnalogData() ;
             channelScales = self.AIChannelScales(self.IsAIChannelActive) ;
-            scalingCoefficients = self.Acquisition_.AnalogScalingCoefficients ;
-            scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMex(rawAnalogData, channelScales, scalingCoefficients) ;
+            if isempty(rawAnalogData)
+                scaledAnalogData = zeros(size(rawAnalogData)) ;
+            else
+                scaledAnalogData = rawAnalogData ./ channelScales ;
+            end
         end  % function
         
         function scaledAnalogData = getAIDataFromCache(self)
-            % Get the data from the main-memory cache, as double-precision floats.  This
-            % call unwraps the circular buffer for you.
+            % Get the data from the main-memory cache, as double-precision floats
+            % in native units. Unwraps the circular buffer for you.
             rawAnalogData = self.Acquisition_.getRawAnalogDataFromCache();
             channelScales=self.AIChannelScales(self.IsAIChannelActive);
-            scalingCoefficients = self.Acquisition_.AnalogScalingCoefficients ;
-            scaledAnalogData = ws.scaledDoubleAnalogDataFromRawMex(rawAnalogData, channelScales, scalingCoefficients) ;            
+            if isempty(rawAnalogData)
+                scaledAnalogData = zeros(size(rawAnalogData)) ;
+            else
+                scaledAnalogData = rawAnalogData ./ channelScales ;
+            end
         end  % function
 
         function scaledData = getSinglePrecisionAIDataFromCache(self)
-            % Get the data from the main-memory cache, as single-precision floats.  This
-            % call unwraps the circular buffer for you.
+            % Get the data from the main-memory cache, as single-precision floats
+            % in native units. Unwraps the circular buffer for you.
             rawAnalogData = self.Acquisition_.getRawAnalogDataFromCache();
             channelScales=self.AIChannelScales(self.IsAIChannelActive);
-            scalingCoefficients = self.Acquisition_.AnalogScalingCoefficients ;
-            scaledData = ws.scaledSingleAnalogDataFromRaw(rawAnalogData, channelScales, scalingCoefficients) ;
+            if isempty(rawAnalogData)
+                scaledData = zeros(size(rawAnalogData), 'single') ;
+            else
+                scaledData = single(rawAnalogData ./ channelScales) ;
+            end
         end  % function
 
         function result = get.IsDIChannelActive(self)

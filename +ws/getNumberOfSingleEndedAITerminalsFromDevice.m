@@ -1,27 +1,20 @@
 function result = getNumberOfSingleEndedAITerminalsFromDevice(deviceName)
-    % The number of AI channels available, if you used them all in
-    % single-ended mode, which WaveSurfer does *not* do.
-    %deviceName = self.DeviceName ;
+    % The number of AI channels available in single-ended mode.
+    % Uses the modern Data Acquisition Toolbox instead of +dabs.
     if isempty(deviceName) ,
         result = 0 ;
-    else
-        try
-            device = ws.dabs.ni.daqmx.Device(deviceName) ;
-            commaSeparatedListOfAIChannels = device.get('AIPhysicalChans') ;  % this is a string
-        catch exception
-            if isequal(exception.identifier,'dabs:noDeviceByThatName') ,
-                result = 0 ;
-                return
-            else
-                rethrow(exception) ;
-            end
-        end
-        if isempty(strtrim(commaSeparatedListOfAIChannels)) ,
-            aiChannelNames = cell(1,0) ;
+        return
+    end
+    try
+        devices = daqlist("ni") ;
+        matchRows = devices(strcmp(devices.DeviceID, deviceName) & ...
+                            strcmp(devices.SubsystemType, "AnalogInput"), :) ;
+        if isempty(matchRows) ,
+            result = 0 ;
         else
-            aiChannelNames = strtrim(strsplit(commaSeparatedListOfAIChannels,',')) ;
+            result = matchRows.NumChannels(1) ;
         end
-            % cellstring, each element of the form '<device name>/ai<channel ID>'
-        result = length(aiChannelNames) ;  % the number of channels available if you used them all in single-ended mode                
+    catch me %#ok<NASGU>
+        result = 0 ;
     end
 end

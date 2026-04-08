@@ -181,14 +181,12 @@ classdef ModularClient < handle
         end
 
         function json = convertToJson(obj,matlabToConvert)
-            json = savejson('',matlabToConvert,'ArrayIndent',0, ...
-                            'ParseLogical',1,'SingletArray',0,'Compact',1);
-            json = strtrim(json);
+            json = strtrim(jsonencode(matlabToConvert));
         end
 
         function result = sendJsonRequest(obj,request)
             if obj.isOpen
-                requestCell = loadjson(request,'SimplifyCell',0);
+                requestCell = jsondecode(request);
                 method = requestCell{1};
                 requestJson = obj.convertToJson(requestCell);
                 fprintf(obj.dev,requestJson);
@@ -241,7 +239,7 @@ classdef ModularClient < handle
                 end
 
                 try
-                    responseStruct = loadjson(response);
+                    responseStruct = jsondecode(response);
                 catch ME
                     causeME = MException( ...
                         'ModularClient:unableToParseJSON', ...

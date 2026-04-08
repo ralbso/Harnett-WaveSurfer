@@ -1,4 +1,7 @@
 classdef OnDemandDOTask < handle
+    % On-demand (untimed) Digital Output Task using MATLAB's native DAQ Toolbox.
+    % Used for setting individual digital lines immediately (not clocked).
+    
     properties (Dependent = true, SetAccess = immutable)
         TaskName
         DeviceNames
@@ -6,175 +9,119 @@ classdef OnDemandDOTask < handle
     end
     
     properties (Dependent = true)
-        ChannelData  % a logical array of the same shape as TerminalIDs (1 x number of channels in task)
+        ChannelData  % logical row vector, one element per channel
     end
     
     properties (Access = protected, Transient = true)
-        DabsDaqTask_ = [];
+        DaqDevice_ = []
     end
     
     properties (Access = protected)
+        TaskName_ = ''
         DeviceNames_ = cell(1,0)
         TerminalIDs_ = zeros(1,0)        
         ChannelData_
     end
     
     methods
-        function self = OnDemandDOTask(taskName, primaryDeviceName, isPrimaryDeviceAPXIDevice, deviceNames, terminalIDs)
-            %fprintf('OnDemandDOTask::OnDemandDOTask():\n');
-            %terminalNames
-            %channelNames
-           
-            nChannels=length(terminalIDs);
-                                    
-            % Create the task, channels
-            if nChannels==0 ,
-                self.DabsDaqTask_ = [] ;
-            else
-                self.DabsDaqTask_ = ws.dabs.ni.daqmx.Task(taskName) ;
-            end            
-            
-            % Create the channels, set the timing mode (has to be done
-            % after adding channels)
-            if nChannels>0 ,
-                for i=1:nChannels ,
-                    %terminalName = terminalNames{i};
-                    %deviceName = ws.deviceNameFromTerminalName(terminalName);
-                    %restOfName = ws.chopDeviceNameFromTerminalName(terminalName);
-                    deviceName = deviceNames{i} ;
-                    terminalID = terminalIDs(i) ;
-                    %channelName = channelNames{i} ;
-                    lineName = sprintf('line%d',terminalID) ;
-                    self.DabsDaqTask_.createDOChan(deviceName, lineName);
-                end       
-                [referenceClockSource, referenceClockRate] = ...
-                    ws.getReferenceClockSourceAndRate(primaryDeviceName, primaryDeviceName, isPrimaryDeviceAPXIDevice) ;                
-                set(self.DabsDaqTask_, 'refClkSrc', referenceClockSource) ;                
-                set(self.DabsDaqTask_, 'refClkRate', referenceClockRate) ;                
-            end            
-            
-            % Store this stuff
-            %self.TerminalNames_ = terminalNames ;
+        function self = OnDemandDOTask(taskName, primaryDeviceName, isPrimaryDeviceAPXIDevice, deviceNames, terminalIDs) %#ok<INUSL>
+            nChannels = length(terminalIDs) ;
+            self.TaskName_ = taskName ;
             self.DeviceNames_ = deviceNames ;
             self.TerminalIDs_ = terminalIDs ;
-            %self.ChannelNames_ = channelNames ;
-        end  % function
+            
+            if nChannels > 0
+                self.DaqDevice_ = daq("ni") ;
+                for i = 1:nChannels
+                    deviceName = deviceNames{i} ;
+                    terminalID = terminalIDs(i) ;
+                    channelID = sprintf("port0/line%d", terminalID) ;
+                    addoutput(self.DaqDevice_, deviceName, channelID, "Digital") ;
+                end
+            else
+                self.DaqDevice_ = [] ;
+            end
+        end
         
         function delete(self)
-            if ~isempty(self.DabsDaqTask_) && self.DabsDaqTask_.isvalid() ,                
+            if ~isempty(self.DaqDevice_) && isvalid(self.DaqDevice_)
                 try
-                    self.zeroChannelData();  % set all channels off before deleting
-                catch me %#ok<NASGU>
-                    % just ignore, since can't throw during a delete method
+                    self.zeroChannelData() ;
+                catch
                 end
-                delete(self.DabsDaqTask_);  % have to explicitly delete, b/c ws.dabs.ni.daqmx.System has refs to, I guess
+                delete(self.DaqDevice_) ;
             end
-            self.DabsDaqTask_=[];
-        end  % function
+            self.DaqDevice_ = [] ;
+        end
         
-        function start(self)
-            self.DabsDaqTask_.start();
-        end  % function
+        function start(self) %#ok<MANU>
+            % On-demand output doesn't need explicit start/stop
+        end
         
-%         function abort(self)
-%             if ~isempty(self.DabsDaqTask_)
-%                 self.DabsDaqTask_.abort();
-%             end
-%         end  % function
-        
-        function stop(self)
-            if ~isempty(self.DabsDaqTask_) && ~self.DabsDaqTask_.isTaskDoneQuiet()
-                self.DabsDaqTask_.stop();
-            end
-        end  % function
+        function stop(self) %#ok<MANU>
+            % On-demand output doesn't need explicit start/stop
+        end
         
         function zeroChannelData(self)
-            nChannels=length(self.TerminalIDs);
-            self.ChannelData = false(1,nChannels);  % N.B.: Want to use public setter, so output gets sync'ed
-        end  % function
+            nChannels = length(self.TerminalIDs) ;
+            self.ChannelData = false(1, nChannels) ;
+        end
         
         function setChannelDataFancy(self, outputStateIfUntimedForEachDOChannel, isInUntimedDOTaskForEachUntimedDOChannel, isDOChannelTimed)
-            % This is a utility for setting the channel data, that meshes
-            % well with the data stored in the Looper.
             isDOChannelUntimed = ~isDOChannelTimed ;
             outputStateForEachUntimedDOChannel = outputStateIfUntimedForEachDOChannel(isDOChannelUntimed) ;
             outputStateForEachChannelInUntimedDOTask = outputStateForEachUntimedDOChannel(isInUntimedDOTaskForEachUntimedDOChannel) ;
-            if ~isempty(outputStateForEachChannelInUntimedDOTask) ,  % protects us against differently-dimensioned empties
+            if ~isempty(outputStateForEachChannelInUntimedDOTask)
                 self.ChannelData = outputStateForEachChannelInUntimedDOTask ;
             end
         end
             
         function value = get.ChannelData(self)
-            value = self.ChannelData_;
-        end  % function
+            value = self.ChannelData_ ;
+        end
         
         function set.ChannelData(self, newValue)
             nChannels = length(self.TerminalIDs) ;
-            if islogical(newValue) && isrow(newValue) && length(newValue)==nChannels ,
-                self.ChannelData_ = newValue;
-                self.syncOutputBufferToChannelData_();
+            if islogical(newValue) && isrow(newValue) && length(newValue) == nChannels
+                self.ChannelData_ = newValue ;
+                self.syncOutputToChannelData_() ;
             else
                 error('ws:invalidPropertyValue', ...
-                      'ChannelData must be an 1x%d matrix, of the appropriate type.',nChannels);
+                      'ChannelData must be a 1x%d logical row vector.', nChannels) ;
             end
-        end  % function        
+        end
         
-        function setChannelDataQuicklyAndDirtily(self,newValue)
-            % Set the channel data as fast as possible, for minimum
-            % latency.  Note that there's no error checking here, so if
-            % newValue is a bad value, that's on you.  No free lunch, etc.
+        function setChannelDataQuicklyAndDirtily(self, newValue)
+            % Set channel data with no error checking for minimum latency.
             self.ChannelData_ = newValue ;
-            self.DabsDaqTask_.writeDigitalData(newValue);
+            if ~isempty(self.DaqDevice_)
+                write(self.DaqDevice_, double(newValue)) ;
+            end
+        end
+        
+        function out = get.TerminalIDs(self)
+            out = self.TerminalIDs_ ;
+        end
+        
+        function out = get.DeviceNames(self)
+            out = self.DeviceNames_ ;
+        end
+        
+        function out = get.TaskName(self)
+            out = self.TaskName_ ;
         end
         
         function debug(self) %#ok<MANU>
             keyboard
-        end  % function        
-    end  % methods
-    
-    methods                
-%         function out = get.TerminalNames(self)
-%             out = self.TerminalNames_ ;
-%         end  % function
-
-        function out = get.TerminalIDs(self)
-            out = self.TerminalIDs_ ;
-        end  % function
-                    
-        function out = get.TaskName(self)
-            if isempty(self.DabsDaqTask_) ,
-                out = '';
-            else
-                out = self.DabsDaqTask_.taskName;
-            end
-        end  % function
-    end  % public methods
-    
-%     methods (Access = protected)        
-%         function taskDone_(self, ~, ~)
-%             % For a successful capture, this class is responsible for stopping the task when
-%             % it is done.  For external clients to interrupt a running task, use the abort()
-%             % method on the Output object.
-%             self.DabsDaqTask_.stop();
-%             
-%             % Fire the event before unregistering the callback functions.  At the end of a
-%             % script the DAQmx callbacks may be the only references preventing the object
-%             % from deleting before the events are sent/complete.
-%             self.notify('OutputComplete');
-%         end  % function        
-%     end  % protected methods block
+        end
+    end
     
     methods (Access = protected)
-        function syncOutputBufferToChannelData_(self)
-            % Actually set up the task, if present
-            if isempty(self.DabsDaqTask_) ,
-                % do nothing
-            else            
-                % Write the data to the output buffer
-                outputData = self.ChannelData ;
-                self.DabsDaqTask_.writeDigitalData(outputData) ;
+        function syncOutputToChannelData_(self)
+            if ~isempty(self.DaqDevice_)
+                write(self.DaqDevice_, double(self.ChannelData_)) ;
             end
-        end  % function
-    end  % Static methods
+        end
+    end
     
-end  % classdef
+end

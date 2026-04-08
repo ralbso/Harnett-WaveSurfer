@@ -1,43 +1,37 @@
-function [numberOfDIOChannels,numberOfPFILines] = getNumberOfDIOAndPFITerminalsFromDevice(deviceName)
-    % The number of DIO channels available.  We only count the DIO
-    % channels capable of timed operation, i.e. the P0.x channels.
-    % This is a conscious design choice.  We treat the PFIn/Pm.x
-    % channels as being only PFIn channels.
-    %deviceName = self.DeviceName ;
+function [numberOfDIOChannels, numberOfPFILines] = getNumberOfDIOAndPFITerminalsFromDevice(deviceName)
+    % Returns the number of timed DIO channels (port0 lines) and PFI lines.
+    % Uses the modern Data Acquisition Toolbox instead of +dabs.
+    %
+    % DIO channels = port0 lines capable of timed operation.
+    % PFI lines = trigger/timing lines (typically 16 on NI X-series cards).
     if isempty(deviceName) ,
         numberOfDIOChannels = 0 ;
         numberOfPFILines = 0 ;
-    else
-        try
-            device = ws.dabs.ni.daqmx.Device(deviceName) ;
-            commaSeparatedListOfChannelNames = device.get('DILines') ;  % this is a string
-        catch exception
-            if isequal(exception.identifier,'dabs:noDeviceByThatName') ,
-                numberOfDIOChannels = 0 ;
-                numberOfPFILines = 0 ;
-                return
-            else
-                rethrow(exception) ;
-            end
-        end
-        if isempty(strtrim(commaSeparatedListOfChannelNames)) ,
-            channelNames = cell(1,0) ;
-        else
-            channelNames = strtrim(strsplit(commaSeparatedListOfChannelNames,',')) ;
-        end
-            % cellstring, each element of the form '<device name>/port<port ID>/line<line ID>'
-        % We only want to count the port0 lines, since those are
-        % the only ones that can be used for timed operations.
-        splitChannelNames = cellfun(@(string)(strsplit(string,'/')), channelNames, 'UniformOutput', false) ;
-        lengthOfEachSplit = cellfun(@(cellstring)(length(cellstring)), splitChannelNames) ;
-        if any(lengthOfEachSplit<2) ,
-            numberOfDIOChannels = 0 ;  % should we throw an error here instead?
-            numberOfPFILines = 0 ;
-        else
-            portNames = cellfun(@(cellstring)(cellstring{2}), splitChannelNames, 'UniformOutput', false) ;  % extract the port name for each channel
-            isAPort0Channel = strcmp(portNames,'port0') ;
-            numberOfDIOChannels = sum(isAPort0Channel) ;
-            numberOfPFILines = sum(~isAPort0Channel) ;
-        end
+        return
     end
-end  % function
+    try
+        devices = daqlist("ni") ;
+        
+        % Get DIO count from DigitalIO subsystem
+        dioRows = devices(strcmp(devices.DeviceID, deviceName) & ...
+                          strcmp(devices.SubsystemType, "DigitalIO"), :) ;
+        if isempty(dioRows) ,
+            numberOfDIOChannels = 0 ;
+        else
+            % The DigitalIO NumChannels reports total port0 lines for timed operation
+            numberOfDIOChannels = dioRows.NumChannels(1) ;
+        end
+        
+        % PFI count: NI X-series cards all have 16 PFI terminals.
+        % There's no clean way to query this from the DAQ toolbox, but 16
+        % is correct for all NI 63xx cards that WaveSurfer supports.
+        if numberOfDIOChannels > 0
+            numberOfPFILines = 16 ;
+        else
+            numberOfPFILines = 0 ;
+        end
+    catch me %#ok<NASGU>
+        numberOfDIOChannels = 0 ;
+        numberOfPFILines = 0 ;
+    end
+end

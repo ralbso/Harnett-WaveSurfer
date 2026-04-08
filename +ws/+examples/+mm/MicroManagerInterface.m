@@ -73,7 +73,7 @@ classdef MicroManagerInterface < handle
 %             end
 %             trimmedResponseString
             try 
-                response = loadjson(responseString) ;
+                response = jsondecode(responseString) ;
             catch me
                 % If the server doesn't understand the request, it returns an HTML "help"
                 % page
@@ -87,9 +87,3 @@ classdef MicroManagerInterface < handle
         end  % function
     end  % protected methods block
 end  % classdef
-
-% function result = jsonFromStruct(s)
-%     result = savejson('',s);
-%     result = strrep(result,sprintf('\n'), '');  %#ok<SPRINTFN>
-%     result = strrep(result,sprintf('\t'), '');
-% end
