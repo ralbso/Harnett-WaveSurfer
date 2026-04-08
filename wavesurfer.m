@@ -7,9 +7,6 @@ function varargout = wavesurfer(varargin)
     %   "WAVESURFER <protocolFileName>" launches the WaveSurfer GUI,
     %   opening the named protocol file on launch.
     %
-    %   "WAVESURFER --debug" launches WaveSurfer in debugging mode.  This
-    %   makes the satellite process windows visible instead of hidden.
-    %
     %   "WAVESURFER --nogui" launches WaveSurfer without the graphical user
     %   interface.
     %      
@@ -23,9 +20,12 @@ function varargout = wavesurfer(varargin)
     %   Except where noted, most of the above forms can be combined in the
     %   usual standard ways.  So, for instance,
     %
-    %     [wsModel, wsController] = WAVESURFER('my-protocol.cfg', '--debug')
+    %     [wsModel, wsController] = WAVESURFER('my-protocol.cfg')
     %
     %   does what you would expect.
+    %
+    %   Note: The --debug flag is accepted for backward compatibility but
+    %   has no effect (satellite processes have been eliminated).
 
     % Takes a while to start, so give some feedback
     fprintf('Starting WaveSurfer...\n');
@@ -42,7 +42,7 @@ function varargout = wavesurfer(varargin)
         % do nothing
         controller=[];
     else
-        controller = ws.WavesurferMainController(model);    
+        controller = ws.WavesurferMainFigure2(model);    
     end
 
     % Do a drawnow()...

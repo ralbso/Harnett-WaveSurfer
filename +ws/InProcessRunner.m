@@ -22,7 +22,6 @@ classdef InProcessRunner < handle
         UntimedDigitalOutputTask_ = []
         
         % Run state
-        IsPerformingRun_ = false
         IsPerformingSweep_ = false
         
         % Polling timer
@@ -57,6 +56,14 @@ classdef InProcessRunner < handle
         
         % Sweep tracking
         NScansAcquiredSoFarThisSweep_ = 0
+        
+        % Untimed DO config
+        IsInUntimedDOTaskForEachUntimedDOChannel_ = false(1,0)
+        IsDOChannelTimed_ = false(1,0)
+    end
+    
+    properties (SetAccess = protected)
+        IsPerformingRun_ = false
     end
     
     methods
@@ -156,6 +163,34 @@ classdef InProcessRunner < handle
             scalingCoefficients = self.TimedAnalogInputTask_.ScalingCoefficients ;
             clockAtRunStart = clock() ;
             
+            % Create the untimed (on-demand) digital output task
+            % This is needed for real-time DO control from user classes (e.g. valve control)
+            if isfield(config, 'IsDOChannelTimed')
+                self.IsDOChannelTimed_ = config.IsDOChannelTimed ;
+                isOnDemand = ~config.IsDOChannelTimed ;
+                isOvercommitted = config.IsDOChannelTerminalOvercommitted ;
+                isUniquelyCommitted = ~isOvercommitted ;
+                if any(isOnDemand)
+                    onDemandTerminalIDs = config.ActiveDOTerminalIDs(isOnDemand) ;
+                    isInTask = isUniquelyCommitted(isOnDemand) ;
+                    self.IsInUntimedDOTaskForEachUntimedDOChannel_ = isInTask ;
+                    if any(isInTask)
+                        deviceNamesInTask = repmat({self.PrimaryDeviceName_}, 1, sum(isInTask)) ;
+                        terminalIDsInTask = onDemandTerminalIDs(isInTask) ;
+                        self.UntimedDigitalOutputTask_ = ...
+                            ws.OnDemandDOTask('WaveSurfer Untimed DO Task', ...
+                                              self.PrimaryDeviceName_, self.IsPrimaryDeviceAPXIDevice_, ...
+                                              deviceNamesInTask, terminalIDsInTask) ;
+                        % Set initial state
+                        onDemandState = config.DigitalOutputStateIfUntimed(isOnDemand) ;
+                        stateInTask = onDemandState(isInTask) ;
+                        if ~isempty(stateInTask)
+                            self.UntimedDigitalOutputTask_.ChannelData = stateInTask ;
+                        end
+                    end
+                end
+            end
+            
             % Create the polling timer
             pollInterval = 0.01 ;  % 10 ms — fast enough for responsive display
             self.PollTimer_ = timer('ExecutionMode', 'fixedSpacing', ...
@@ -231,6 +266,17 @@ classdef InProcessRunner < handle
             doDone = isempty(self.DigitalOutputTask_) || self.DigitalOutputTask_.isDone() ;
             result = aoDone && doDone ;
         end
+        
+        function setUntimedDOState(self, stateForAllDOChannels, isDOChannelTimed)
+            % Write untimed DO channel states directly to hardware.
+            % Called when user code sets wsModel.DOChannelStateIfUntimed.
+            if ~isempty(self.UntimedDigitalOutputTask_)
+                self.UntimedDigitalOutputTask_.setChannelDataFancy(...
+                    stateForAllDOChannels, ...
+                    self.IsInUntimedDOTaskForEachUntimedDOChannel_, ...
+                    isDOChannelTimed) ;
+            end
+        end
     end
     
     methods (Access = protected)
@@ -260,12 +306,19 @@ classdef InProcessRunner < handle
                 
                 self.TimeOfLastPoll_ = toc(self.TicId_) ;
                 
-                % Deliver data to the model
+                % Deliver data to the model (for display, logging, buffering)
                 if nScans > 0
                     self.Model_.samplesAcquired(self.NScansAcquiredSoFarThisSweep_, ...
                                                 analogData, ...
                                                 digitalData, ...
                                                 timeSinceRunStartAtStartOfData) ;
+                    
+                    % Invoke the user's samplesAcquired callback at acquisition rate.
+                    % This preserves backward compatibility with user classes that did
+                    % real-time closed-loop control in samplesAcquired().
+                    % analogData is in volts; scale to native units for the user.
+                    self.invokeUserSamplesAcquired_(analogData, digitalData) ;
+                    
                     self.NScansAcquiredSoFarThisSweep_ = self.NScansAcquiredSoFarThisSweep_ + nScans ;
                 end
                 
@@ -286,6 +339,43 @@ classdef InProcessRunner < handle
         function timerError_(self, evt) %#ok<INUSD>
             warning('ws:timerError', 'Timer error during data acquisition') ;
             self.IsPerformingSweep_ = false ;
+        end
+        
+        function invokeUserSamplesAcquired_(self, analogDataInVolts, rawDigitalData)
+            % Call the user object's samplesAcquired() method, matching the old
+            % Looper calling convention:
+            %   theUserObject.samplesAcquired(rootModel, scaledAnalogData, rawDigitalData)
+            % where scaledAnalogData is in native units (volts / channelScales).
+            try
+                userObject = self.Model_.TheUserObject ;
+                if ~isempty(userObject)
+                    % Scale from volts to native units (same as old Looper did)
+                    if isempty(analogDataInVolts)
+                        scaledAnalogData = analogDataInVolts ;
+                    else
+                        scaledAnalogData = analogDataInVolts ./ self.AIChannelScales_ ;
+                    end
+                    userObject.samplesAcquired(self.Model_, scaledAnalogData, rawDigitalData) ;
+                end
+            catch me
+                warning('ws:userCodeError', 'Error in user class method samplesAcquired: %s', me.message) ;
+                disp(me.getReport()) ;
+            end
+        end
+        
+        function invokeUserEpisodeMethod_(self, methodName)
+            % Call the user object's episode methods (startingEpisode, etc.)
+            % These were previously called in the Refiller process.
+            % The first arg was the Refiller; we now pass the WavesurferModel.
+            try
+                userObject = self.Model_.TheUserObject ;
+                if ~isempty(userObject) && ismethod(userObject, methodName)
+                    userObject.(methodName)(self.Model_) ;
+                end
+            catch me
+                warning('ws:userCodeError', 'Error in user class method %s: %s', methodName, me.message) ;
+                disp(me.getReport()) ;
+            end
         end
         
         function stopAllTasks_(self)
@@ -313,6 +403,11 @@ classdef InProcessRunner < handle
             self.AnalogOutputTask_ = [] ;
             delete(self.DigitalOutputTask_) ;
             self.DigitalOutputTask_ = [] ;
+            if ~isempty(self.UntimedDigitalOutputTask_)
+                delete(self.UntimedDigitalOutputTask_) ;
+            end
+            self.UntimedDigitalOutputTask_ = [] ;
+            self.IsInUntimedDOTaskForEachUntimedDOChannel_ = false(1,0) ;
         end
         
         function destroyTimer_(self)

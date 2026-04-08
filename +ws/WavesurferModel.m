@@ -1201,6 +1201,9 @@ classdef WavesurferModel < ws.Model
                 runConfig.ActiveAOTerminalIDs = self.AOChannelTerminalIDs ;
                 runConfig.ActiveDOTerminalIDs = self.DOChannelTerminalIDs ;
                 runConfig.AIChannelScales = self.AIChannelScales(isAIChannelActive) ;
+                runConfig.IsDOChannelTimed = self.IsDOChannelTimed ;
+                runConfig.DigitalOutputStateIfUntimed = self.DOChannelStateIfUntimed ;
+                runConfig.IsDOChannelTerminalOvercommitted = self.IsDOChannelTerminalOvercommitted ;
                 triggerIndex = self.Triggering_.AcquisitionTriggerSchemeIndex ;
                 if triggerIndex == 1
                     runConfig.TriggerDeviceName = self.PrimaryDeviceName ;
@@ -2382,8 +2385,13 @@ classdef WavesurferModel < ws.Model
 %                                     i, value, self.IsDOChannelTerminalOvercommitted ) ;
 %         end
 
-        function digitalOutputStateIfUntimedWasSetInStimulationSubsystem(self) %#ok<MANU>
-            % (Satellite notification removed — no longer needed)
+        function digitalOutputStateIfUntimedWasSetInStimulationSubsystem(self)
+            % Route the untimed DO state change to the hardware via the Runner.
+            if ~isempty(self.Runner_) && self.Runner_.IsPerformingRun_
+                newState = self.DOChannelStateIfUntimed ;
+                isDOChannelTimed = self.IsDOChannelTimed ;
+                self.Runner_.setUntimedDOState(newState, isDOChannelTimed) ;
+            end
         end
         
         function isDigitalChannelTimedWasSetInStimulationSubsystem(self) %#ok<MANU>

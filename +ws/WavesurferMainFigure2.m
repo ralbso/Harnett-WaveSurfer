@@ -488,8 +488,12 @@ classdef WavesurferMainFigure2 < ws.AppFigure
             end
         end
         
-        function showStimulusLibraryFigure_(self) %#ok<MANU>
-            % TODO: Implement modern StimulusLibraryFigure (most complex window)
+        function showStimulusLibraryFigure_(self)
+            if isempty(self.StimulusLibraryFigure_) || ~isvalid(self.StimulusLibraryFigure_)
+                self.StimulusLibraryFigure_ = ws.StimulusLibraryFigure2(self.Model_) ;
+            else
+                self.StimulusLibraryFigure_.raise() ;
+            end
         end
         
         function showUserCodeFigure_(self)

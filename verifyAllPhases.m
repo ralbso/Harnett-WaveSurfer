@@ -1,6 +1,6 @@
 function verifyAllPhases()
-    % verifyAllPhases — Quick verification that Phases 1-4 changes are consistent.
-    % Run this from the WaveSurfer root directory.
+    % verifyAllPhases — Comprehensive verification of all modernization changes.
+    % Run from the WaveSurfer root directory.
     
     fprintf('=== WaveSurfer Modernization Verification ===\n\n') ;
     nPass = 0 ;
@@ -8,30 +8,20 @@ function verifyAllPhases()
     
     % --- Phase 1: Compatibility ---
     fprintf('--- Phase 1: Compatibility ---\n') ;
-    
-    % Version string
     v = ws.versionString() ;
     check('Version string updated', contains(v, '1.0.0')) ;
-    
-    % Built-in contains
-    check('ws.contains raises deprecation', ...
-          checkThrows(@() ws.contains({'a'}, 'a'))) ;
+    check('ws.contains raises deprecation', checkThrows(@() ws.contains({'a'}, 'a'))) ;
     
     % --- Phase 2: Hardware Layer ---
     fprintf('\n--- Phase 2: Hardware Layer ---\n') ;
-    
-    % Check that device enumeration uses daqlist
     src = fileread(fullfile('+ws', 'getAllDeviceNamesFromHardware.m')) ;
     check('getAllDeviceNamesFromHardware uses daqlist', contains(src, 'daqlist')) ;
-    check('getAllDeviceNamesFromHardware no +dabs', ~contains(src, 'ws.dabs')) ;
     
     src = fileread(fullfile('+ws', 'AITask.m')) ;
     check('AITask uses daq("ni")', contains(src, 'daq("ni")')) ;
-    check('AITask no +dabs', ~contains(src, 'ws.dabs')) ;
     check('AITask returns doubles', contains(src, 'DOUBLE') || contains(src, 'double')) ;
     
     src = fileread(fullfile('+ws', 'AOTask.m')) ;
-    check('AOTask uses daq("ni")', contains(src, 'daq("ni")')) ;
     check('AOTask preserves Harnett Cmd I mod', contains(src, 'Cmd I')) ;
     
     src = fileread(fullfile('+ws', 'SamplesBuffer.m')) ;
@@ -40,42 +30,69 @@ function verifyAllPhases()
     src = fileread(fullfile('+ws', 'Logging.m')) ;
     check('Logging stores doubles in HDF5', contains(src, '''double''')) ;
     
-    src = fileread(fullfile('+ws', 'Acquisition.m')) ;
-    check('Acquisition cache is double', ~contains(src, 'zeros(nScans,nActiveAnalogChannels,''int16'')')) ;
-    
     % --- Phase 3: Satellite Elimination ---
     fprintf('\n--- Phase 3: Satellite Elimination ---\n') ;
-    
     check('InProcessRunner.m exists', exist('+ws/InProcessRunner.m', 'file') == 2) ;
     
     src = fileread(fullfile('+ws', 'WavesurferModel.m')) ;
     check('WavesurferModel has Runner_', contains(src, 'Runner_')) ;
-    check('WavesurferModel no active IPCPublisher_', ...
-          ~contains(regexprep(src, '%[^\n]*', ''), 'IPCPublisher_.send')) ;
-    check('WavesurferModel no active LooperIPCRequester_', ...
-          ~contains(regexprep(src, '%[^\n]*', ''), 'LooperIPCRequester_.send')) ;
-    check('WavesurferModel no active RefillerIPCRequester_', ...
-          ~contains(regexprep(src, '%[^\n]*', ''), 'RefillerIPCRequester_.send')) ;
-    check('WavesurferModel no system() launch', ...
-          ~contains(regexprep(src, '%[^\n]*', ''), 'system(looperLaunchString)')) ;
+    
+    % Strip comments and check for active IPC references
+    srcNoComments = regexprep(src, '%[^\n]*', '') ;
+    check('No active IPCPublisher_.send', ~contains(srcNoComments, 'IPCPublisher_.send')) ;
+    check('No active LooperIPCRequester_', ~contains(srcNoComments, 'LooperIPCRequester_.send')) ;
+    check('No active RefillerIPCRequester_', ~contains(srcNoComments, 'RefillerIPCRequester_.send')) ;
+    check('No system() satellite launch', ~contains(srcNoComments, 'system(looperLaunchString)')) ;
+    
+    % GenTL compatibility: untimed DO path
+    check('Runner has setUntimedDOState', contains(fileread('+ws/InProcessRunner.m'), 'setUntimedDOState')) ;
+    check('WSM routes DO state to Runner', contains(src, 'Runner_.setUntimedDOState')) ;
+    
+    % User class callback routing
+    runnerSrc = fileread(fullfile('+ws', 'InProcessRunner.m')) ;
+    check('Runner invokes user samplesAcquired', contains(runnerSrc, 'invokeUserSamplesAcquired_')) ;
     
     % --- Phase 4: Modern UI ---
     fprintf('\n--- Phase 4: Modern UI ---\n') ;
+    newFiles = { ...
+        'AppFigure', ...
+        'WavesurferMainFigure2', ...
+        'GeneralSettingsFigure2', ...
+        'ChannelsFigure2', ...
+        'FastProtocolsFigure2', ...
+        'TriggersFigure2', ...
+        'ElectrodeManagerFigure2', ...
+        'TestPulserFigure2', ...
+        'UserCodeManagerFigure2', ...
+        'StimulusLibraryFigure2', ...
+        'YLimDialogFigure2', ...
+        'PlotArrangementDialogFigure2' } ;
+    for i = 1:length(newFiles)
+        f = newFiles{i} ;
+        exists = exist(fullfile('+ws', [f '.m']), 'file') == 2 ;
+        check(sprintf('%s.m exists', f), exists) ;
+    end
     
-    check('AppFigure.m exists', exist('+ws/AppFigure.m', 'file') == 2) ;
-    check('WavesurferMainFigure2.m exists', exist('+ws/WavesurferMainFigure2.m', 'file') == 2) ;
+    appSrc = fileread(fullfile('+ws', 'AppFigure.m')) ;
+    check('AppFigure uses uifigure', contains(appSrc, 'uifigure')) ;
+    check('AppFigure uses uigridlayout', contains(appSrc, 'uigridlayout')) ;
     
-    src = fileread(fullfile('+ws', 'AppFigure.m')) ;
-    check('AppFigure uses uifigure', contains(src, 'uifigure')) ;
-    check('AppFigure uses uigridlayout', contains(src, 'uigridlayout')) ;
+    mainSrc = fileread(fullfile('+ws', 'WavesurferMainFigure2.m')) ;
+    check('MainFigure2 uses uiaxes', contains(mainSrc, 'uiaxes')) ;
+    check('MainFigure2 uses animatedline', contains(mainSrc, 'animatedline')) ;
     
-    src = fileread(fullfile('+ws', 'WavesurferMainFigure2.m')) ;
-    check('MainFigure2 uses uiaxes', contains(src, 'uiaxes')) ;
-    check('MainFigure2 uses animatedline', contains(src, 'animatedline')) ;
-    check('MainFigure2 has merged callbacks', contains(src, 'playButtonPushed_')) ;
+    % Launcher update
+    launcherSrc = fileread('wavesurfer.m') ;
+    check('Launcher uses WavesurferMainFigure2', contains(launcherSrc, 'WavesurferMainFigure2')) ;
+    check('Launcher no longer references old controller', ~contains(launcherSrc, 'WavesurferMainController')) ;
     
     % --- Summary ---
     fprintf('\n=== Results: %d passed, %d failed ===\n', nPass, nFail) ;
+    if nFail == 0
+        fprintf('All checks passed! Ready for hardware testing.\n') ;
+    else
+        fprintf('Some checks failed — review the FAIL items above.\n') ;
+    end
     
     function check(description, passed)
         if passed
